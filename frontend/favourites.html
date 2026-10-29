@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Favourites | PulseCast Radio</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+</head>
+<body>
+  <div class="app-wrapper">
+    <header class="site-header">
+      <div class="header-container">
+        <div class="brand">
+          <img src="/assets/logo.svg" alt="" class="brand-logo" width="44" height="44">
+          <div class="brand-text">
+            <span class="brand-title">PulseCast</span>
+            <span class="brand-subtitle">Personal Favourites</span>
+          </div>
+        </div>
+        <nav class="site-nav" id="siteNav">
+          <a href="/index.html" class="nav-link">Live Player</a>
+          <a href="/stations.html" class="nav-link">Stations</a>
+          <a href="/favourites.html" class="nav-link active">★ Favourites</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="player-container">
+        <div class="testbench-card">
+          <div class="card-title-bar">
+            <h2>Your Starred Stations</h2>
+            <span class="badge-pill">Persisted in MySQL</span>
+          </div>
+          <p class="section-note">
+            Stations you have starred appear here. Click Tune In to start listening immediately.
+          </p>
+
+          <div id="favouritesList" class="stations-grid" style="margin-top: 1rem;">
+            <div style="color:var(--text-muted); padding:2rem; grid-column:1/-1; text-align:center;">
+              Loading favourites...
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-container">
+        <p>&copy; 2026 PulseCast Full-Stack Internet Radio</p>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const container = document.getElementById('favouritesList');
+      const user = await auth.getCurrentUser();
+
+      if (!user) {
+        container.innerHTML = `
+          <div class="form-error-banner" style="grid-column:1/-1; text-align:center; padding:2rem;">
+            You must be signed in to view your personal favourites.<br><br>
+            <a href="/login.html" class="btn-primary" style="text-decoration:none; display:inline-block;">Sign In Now</a>
+          </div>
+        `;
+        return;
+      }
+
+      async function loadFavs() {
+        try {
+          const resp = await apiClient.get('/favourites');
+          const favs = resp.data || [];
+
+          if (favs.length === 0) {
+            container.innerHTML = `
+              <div style="color:var(--text-muted); padding:3rem; grid-column:1/-1; text-align:center;">
+                You haven't added any stations to your favourites yet.<br><br>
+                <a href="/stations.html" class="btn-primary" style="text-decoration:none; display:inline-block;">Browse Station Catalogue</a>
+              </div>
+            `;
+            return;
+          }
+
+          container.innerHTML = favs.map(s => `
+            <div class="station-card">
+              <div class="card-top">
+                <div class="card-title-group">
+                  <h3>${escapeHtml(s.name)}</h3>
+                  <span class="card-genre">${escapeHtml(s.genre || 'General')}</span>
+                </div>
+                <button class="card-fav-btn active" data-id="${s.id}" title="Remove from favourites">★</button>
+              </div>
+              <p class="card-desc">${escapeHtml(s.description || 'Continuous online streaming audio broadcast.')}</p>
+              <div class="card-actions">
+                <a href="/index.html?station=${s.id}" class="btn-sm btn-primary">▶ Tune In</a>
+                <a href="/station.html?id=${s.id}" class="btn-sm btn-secondary">Details</a>
+              </div>
+            </div>
+          `).join('');
+
+          container.querySelectorAll('.card-fav-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const id = btn.getAttribute('data-id');
+              try {
+                await apiClient.delete(`/favourites/${id}`);
+                loadFavs();
+              } catch (err) {
+                alert(err.message || 'Failed to remove favourite.');
+              }
+            });
+          });
+        } catch (e) {
+          container.innerHTML = `<div class="form-error-banner" style="grid-column:1/-1;">Error: ${escapeHtml(e.message)}</div>`;
+        }
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t));
+      }
+
+      loadFavs();
+    });
+  </script>
+</body>
+</html>
+

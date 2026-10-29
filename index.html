@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A lightweight, responsive browser-based internet radio streaming system built with HTML5, CSS3, and JavaScript.">
+  <meta name="theme-color" content="#0f172a">
+  <title>PulseCast Radio | Live Internet Audio Stream</title>
+  
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Top Global Header -->
+    <header class="site-header" role="banner">
+      <div class="header-container">
+        <div class="brand">
+          <img src="assets/logo.svg" alt="PulseCast Radio Logo" class="brand-logo" width="44" height="44">
+          <div class="brand-text">
+            <span class="brand-title">PulseCast</span>
+            <span class="brand-subtitle">Internet Radio System</span>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <div class="live-badge" id="liveBadge" aria-label="Broadcast is active">
+            <span class="pulse-dot"></span>
+            <span class="badge-text">LIVE AIR</span>
+          </div>
+          <button id="toggleGuideBtn" class="btn-subtle" aria-expanded="false" aria-controls="guideModal" title="Icecast Setup & Specifications Guide">
+            <svg class="icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <span>Icecast Guide</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Player Section -->
+    <main class="main-content" id="mainContent" role="main">
+      <div class="player-container">
+        <!-- Radio Player Card -->
+        <section class="player-card" aria-label="Internet Radio Player">
+          <!-- Card Header & Metadata -->
+          <div class="player-visual-area">
+            <div class="artwork-wrapper">
+              <img src="assets/station-artwork.svg" alt="Album Cover Artwork" class="station-artwork" id="stationArtwork" width="280" height="280">
+              
+              <!-- Live Equalizer Animation Overlay -->
+              <div class="equalizer-overlay" id="equalizer" aria-hidden="true">
+                <span class="eq-bar bar-1"></span>
+                <span class="eq-bar bar-2"></span>
+                <span class="eq-bar bar-3"></span>
+                <span class="eq-bar bar-4"></span>
+                <span class="eq-bar bar-5"></span>
+                <span class="eq-bar bar-6"></span>
+                <span class="eq-bar bar-7"></span>
+              </div>
+            </div>
+
+            <div class="station-meta">
+              <div class="station-tags">
+                <span class="tag" id="stationFormat">128 kbps MP3</span>
+                <span class="tag" id="stationProtocol">HTTPS Direct</span>
+                <span class="tag server-tag" id="serverType">Icecast / HTTP Stream</span>
+              </div>
+              <h1 class="station-name" id="stationName">Radio Paradise (Main Mix)</h1>
+              <p class="station-tagline" id="stationTagline">Eclectic Rock, Indie, World & Acoustic Stream</p>
+              <p class="station-desc" id="stationDesc">
+                High-fidelity, commercial-free streaming audio distributed over internet audio servers.
+              </p>
+            </div>
+          </div>
+
+          <!-- Live State Banner (Accessible ARIA live region) -->
+          <div class="status-banner" id="statusBanner" role="status" aria-live="polite">
+            <div class="status-indicator-icon" id="statusIcon">
+              <span class="status-dot"></span>
+            </div>
+            <div class="status-text-group">
+              <span class="status-title" id="statusTitle">Ready</span>
+              <span class="status-message" id="statusMessage">Ready to play. Click Play to start stream.</span>
+            </div>
+            <!-- Quick Retry button visible during error or stall -->
+            <button id="retryBtn" class="btn-retry" style="display: none;" title="Retry connecting to stream">
+              <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+              <span>Retry</span>
+            </button>
+          </div>
+
+          <!-- Primary Player Controls -->
+          <div class="player-controls">
+            <!-- Play / Pause Action Button -->
+            <div class="playback-action">
+              <button id="playPauseBtn" class="play-btn" aria-label="Play audio stream" title="Play / Pause (Spacebar)">
+                <svg class="play-icon" id="playIcon" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+                  <polygon points="6 3 20 12 6 21 6 3"></polygon>
+                </svg>
+                <svg class="pause-icon" id="pauseIcon" viewBox="0 0 24 24" width="32" height="32" fill="currentColor" style="display: none;">
+                  <rect x="6" y="4" width="4" height="16" rx="1"></rect>
+                  <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+                </svg>
+                <span class="spinner-icon" id="loadingSpinner" style="display: none;" aria-hidden="true"></span>
+              </button>
+            </div>
+
+            <!-- Volume Control Bar -->
+            <div class="volume-control-wrapper">
+              <button id="muteBtn" class="mute-btn" aria-label="Mute audio (M)" title="Toggle Mute (M)">
+                <!-- High Volume Icon -->
+                <svg class="vol-icon" id="volIconHigh" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"></polygon>
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                </svg>
+                <!-- Medium Volume Icon -->
+                <svg class="vol-icon" id="volIconMed" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"></polygon>
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                </svg>
+                <!-- Mute Icon -->
+                <svg class="vol-icon" id="volIconMuted" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"></polygon>
+                  <line x1="23" y1="9" x2="17" y2="15"></line>
+                  <line x1="17" y1="9" x2="23" y2="15"></line>
+                </svg>
+              </button>
+
+              <div class="slider-group">
+                <label for="volumeSlider" class="visually-hidden">Adjust audio volume</label>
+                <input 
+                  type="range" 
+                  id="volumeSlider" 
+                  class="volume-slider" 
+                  min="0" 
+                  max="1" 
+                  step="0.01" 
+                  value="0.8" 
+                  aria-label="Volume level"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow="80"
+                  aria-valuetext="80 percent">
+                <span class="volume-readout" id="volumeReadout" aria-hidden="true">80%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Stream Endpoint Information -->
+          <div class="stream-endpoint-box">
+            <div class="endpoint-label">
+              <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="2"></circle>
+                <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path>
+              </svg>
+              <span>Current Audio Endpoint:</span>
+            </div>
+            <code class="stream-url-display" id="streamUrlDisplay">https://stream.radioparadise.com/mp3-128</code>
+          </div>
+        </section>
+
+        <!-- Stream Switcher & Test Bench Section (FR-10, TC-05, TC-06 testing) -->
+        <section class="testbench-card" aria-label="Stream Selection and Test Suite">
+          <div class="card-title-bar">
+            <h2>Stream Presets & SRS Acceptance Tests</h2>
+            <span class="badge-pill">FR-10 / TC-01 to TC-07</span>
+          </div>
+          <p class="section-note">
+            Quickly switch between live authorized stations or trigger test error conditions defined in the SRS (invalid URL, offline stream).
+          </p>
+
+          <div class="presets-grid" role="group" aria-label="Audio Stream Presets">
+            <button class="preset-btn active" data-preset="radio-paradise">
+              <span class="preset-name">Radio Paradise</span>
+              <span class="preset-desc">Eclectic Rock & Acoustic (Live HTTPS)</span>
+            </button>
+            <button class="preset-btn" data-preset="nightwave-plaza">
+              <span class="preset-name">Nightwave Plaza</span>
+              <span class="preset-desc">Vaporwave / Chillhop (Live HTTPS)</span>
+            </button>
+            <button class="preset-btn" data-preset="icecast-live">
+              <span class="preset-name">CJWF Icecast 2.4</span>
+              <span class="preset-desc">Live Icecast Streaming Server Mount</span>
+            </button>
+            <button class="preset-btn test-error-btn" data-preset="test-invalid" title="Tests SRS requirement TC-05: Invalid Stream URL">
+              <span class="preset-name">&#9888; Test Invalid URL (TC-05)</span>
+              <span class="preset-desc">Simulates broken stream path</span>
+            </button>
+            <button class="preset-btn test-error-btn" data-preset="test-offline" title="Tests SRS requirement TC-06: Unavailable Stream">
+              <span class="preset-name">&#9888; Test Offline Server (TC-06)</span>
+              <span class="preset-desc">Simulates unreachable server endpoint</span>
+            </button>
+          </div>
+
+          <!-- Custom Stream URL Input -->
+          <div class="custom-stream-box">
+            <label for="customStreamInput" class="custom-stream-label">
+              <span>Custom Stream or Local Icecast Mount URL:</span>
+              <span class="label-hint">(e.g., http://localhost:8000/live or any Icecast/Shoutcast URL)</span>
+            </label>
+            <div class="custom-input-group">
+              <input type="url" id="customStreamInput" placeholder="https://your-icecast-server.com/mountpoint.mp3" spellcheck="false" autocomplete="off">
+              <button id="applyCustomStreamBtn" class="btn-primary">Apply Stream</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Diagnostic Event Inspector / Debug Log (for testers and supervisors) -->
+        <section class="diagnostic-card" aria-label="System Diagnostics and Audio Event Log">
+          <div class="diagnostic-header">
+            <div class="diagnostic-title">
+              <span class="status-indicator-dot"></span>
+              <h3>HTML5 Audio Event Log (TC-01 – TC-10 Diagnostics)</h3>
+            </div>
+            <div class="diagnostic-actions">
+              <button id="clearLogBtn" class="btn-text">Clear Log</button>
+              <button id="toggleLogDetailsBtn" class="btn-text" aria-expanded="true">Collapse</button>
+            </div>
+          </div>
+          <div class="log-console-container" id="logConsoleContainer">
+            <div class="log-console" id="logConsole" role="log" aria-live="off">
+              <div class="log-entry sys">[SYSTEM] Internet Radio Streaming System initialized. Ready for user interaction.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Keyboard Shortcuts & Instructions Card -->
+        <aside class="info-card" aria-label="Keyboard Accessibility and Quick Reference">
+          <h3>Accessibility & Keyboard Shortcuts</h3>
+          <ul class="shortcuts-list">
+            <li><kbd>Space</kbd> or <kbd>K</kbd> <span>Play / Pause audio playback</span></li>
+            <li><kbd>M</kbd> <span>Toggle Mute / Unmute</span></li>
+            <li><kbd>&uarr;</kbd> / <kbd>&darr;</kbd> <span>Increase / Decrease volume by 5%</span></li>
+            <li><kbd>Tab</kbd> / <kbd>Shift + Tab</kbd> <span>Navigate interactive player controls</span></li>
+          </ul>
+        </aside>
+      </div>
+    </main>
+
+    <!-- Icecast Integration & Specification Modal Dialog (FR-11, FR-12) -->
+    <div class="modal-backdrop" id="guideModal" role="dialog" aria-modal="true" aria-labelledby="guideTitle" style="display: none;">
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <img src="assets/logo.svg" alt="" width="28" height="28">
+            <h2 id="guideTitle">Icecast Integration & System Architecture</h2>
+          </div>
+          <button id="closeGuideBtn" class="modal-close-btn" aria-label="Close dialog">&times;</button>
+        </div>
+        <div class="modal-body">
+          <section class="guide-section">
+            <h3>1. Icecast 2.4+ Setup Architecture</h3>
+            <p>
+              In accordance with Section 3 of the SRS, the extended release connects a broadcasting source to an Icecast server to distribute a live MP3/AAC audio stream to multiple browser clients simultaneously.
+            </p>
+            <div class="code-block-wrapper">
+              <pre><code>[ Broadcast Source: OBS / BUTT / Mixxx ]
+                 &#8595; (source protocol port 8000)
+    [ Icecast 2.4 Streaming Server ]
+                 &#8595; (HTTP/HTTPS mount e.g. /live.mp3)
+  [ Modern Web Browsers (HTML5 Audio Player) ]</code></pre>
+            </div>
+          </section>
+
+          <section class="guide-section">
+            <h3>2. Broadcaster Software Configuration (OBS / BUTT / Mixxx)</h3>
+            <ul>
+              <li><strong>Server Type:</strong> Icecast 2</li>
+              <li><strong>Server Address:</strong> <code>127.0.0.1</code> (or your public server IP / domain)</li>
+              <li><strong>Port:</strong> <code>8000</code></li>
+              <li><strong>Mount:</strong> <code>/live.mp3</code></li>
+              <li><strong>Password:</strong> Configured <code>&lt;source-password&gt;</code> in <code>icecast.xml</code></li>
+              <li><strong>Audio Codec:</strong> MP3 (128 kbps or 192 kbps, 44.1 kHz, Stereo)</li>
+            </ul>
+          </section>
+
+          <section class="guide-section">
+            <h3>3. Multi-Listener Verification (TC-12)</h3>
+            <p>
+              To test the multi-listener requirement from FR-12 and TC-12:
+            </p>
+            <ol>
+              <li>Start Icecast and begin broadcasting audio from your source software.</li>
+              <li>Ensure firewall allows inbound TCP on port 8000 (or HTTPS reverse proxy 443).</li>
+              <li>Enter your stream URL (e.g., <code>http://&lt;your-ip&gt;:8000/live.mp3</code>) into the Custom Stream box above.</li>
+              <li>Open the player on Device 1 (e.g. desktop) and Device 2 (e.g. smartphone or secondary browser).</li>
+              <li>Verify that both listeners can simultaneously hear the broadcast without interference.</li>
+            </ol>
+          </section>
+
+          <section class="guide-section">
+            <h3>4. HTTPS & Mixed-Content Note (NFR-08, TC-11)</h3>
+            <p>
+              Browsers block HTTP streams when the host website is served over HTTPS (Mixed Content restriction). When deploying to production on HTTPS (GitHub Pages, Vercel, Netlify), your Icecast server should use an HTTPS reverse proxy (e.g. Nginx with Let's Encrypt SSL certificate) or use an authorized HTTPS stream URL.
+            </p>
+          </section>
+        </div>
+        <div class="modal-footer">
+          <button id="modalDismissBtn" class="btn-primary">Got it, close guide</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden HTML5 Audio Element (Controlled by js/script.js) -->
+    <audio id="audioPlayer" preload="none"></audio>
+
+    <!-- Page Footer -->
+    <footer class="site-footer" role="contentinfo">
+      <div class="footer-container">
+        <p>&copy; 2026 Web-Based Internet Radio Streaming System &bull; SRS Baseline v1.0 Compliant</p>
+        <p class="footer-meta">Pure HTML5 Audio &bull; CSS3 Responsive &bull; Vanilla JavaScript ES6+</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- JavaScript Player Controller -->
+  <script src="js/script.js"></script>
+</body>
+</html>
+

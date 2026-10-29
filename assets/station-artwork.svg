@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500" fill="none">
+  <defs>
+    <radialGradient id="artBg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </radialGradient>
+    <linearGradient id="discGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="40%" stop-color="#8b5cf6" />
+      <stop offset="80%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <linearGradient id="neonGlow" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+    <filter id="artBlur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="25" />
+    </filter>
+  </defs>
+
+  <!-- Canvas Background -->
+  <rect width="500" height="500" rx="32" fill="url(#artBg)" />
+
+  <!-- Ambient glowing blobs -->
+  <circle cx="150" cy="180" r="120" fill="#6366f1" opacity="0.35" filter="url(#artBlur)" />
+  <circle cx="360" cy="320" r="130" fill="#ec4899" opacity="0.3" filter="url(#artBlur)" />
+  <circle cx="280" cy="160" r="90" fill="#06b6d4" opacity="0.25" filter="url(#artBlur)" />
+
+  <!-- Vinyl Record Effect / Grooves -->
+  <circle cx="250" cy="250" r="190" stroke="#334155" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.5" />
+  <circle cx="250" cy="250" r="160" stroke="#475569" stroke-width="1" opacity="0.4" />
+  <circle cx="250" cy="250" r="130" stroke="#64748b" stroke-width="1.5" stroke-dasharray="12 6" opacity="0.3" />
+
+  <!-- Dynamic concentric rings -->
+  <circle cx="250" cy="250" r="105" stroke="url(#discGrad)" stroke-width="5" opacity="0.85" />
+  <circle cx="250" cy="250" r="85" fill="#0f172a" stroke="#6366f1" stroke-width="2" />
+
+  <!-- Central Badge -->
+  <circle cx="250" cy="250" r="48" fill="url(#discGrad)" />
+  <circle cx="250" cy="250" r="14" fill="#0f172a" />
+
+  <!-- Soundwave graphics around bottom -->
+  <g transform="translate(100, 360)">
+    <rect x="0" y="20" width="8" height="40" rx="4" fill="#38bdf8" />
+    <rect x="18" y="5" width="8" height="55" rx="4" fill="#60a5fa" />
+    <rect x="36" y="25" width="8" height="35" rx="4" fill="#818cf8" />
+    <rect x="54" y="0" width="8" height="60" rx="4" fill="#a78bfa" />
+    <rect x="72" y="15" width="8" height="45" rx="4" fill="#c084fc" />
+    <rect x="90" y="30" width="8" height="30" rx="4" fill="#e879f9" />
+    <rect x="108" y="10" width="8" height="50" rx="4" fill="#f472b6" />
+    <rect x="126" y="22" width="8" height="38" rx="4" fill="#fb7185" />
+    <rect x="144" y="8" width="8" height="52" rx="4" fill="#f43f5e" />
+    <rect x="162" y="28" width="8" height="32" rx="4" fill="#fb923c" />
+    <rect x="180" y="14" width="8" height="46" rx="4" fill="#facc15" />
+    <rect x="198" y="2" width="8" height="58" rx="4" fill="#4ade80" />
+    <rect x="216" y="20" width="8" height="40" rx="4" fill="#2dd4bf" />
+    <rect x="234" y="32" width="8" height="28" rx="4" fill="#38bdf8" />
+    <rect x="252" y="12" width="8" height="48" rx="4" fill="#60a5fa" />
+    <rect x="270" y="25" width="8" height="35" rx="4" fill="#818cf8" />
+    <rect x="288" y="38" width="8" height="22" rx="4" fill="#a78bfa" />
+  </g>
+
+  <!-- Typography elements inside SVG artwork -->
+  <text x="250" y="90" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="700" fill="#94a3b8" letter-spacing="4">INTERNET RADIO</text>
+  <text x="250" y="122" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="900" fill="#f8fafc" letter-spacing="2">LIVE ON AIR</text>
+</svg>
+

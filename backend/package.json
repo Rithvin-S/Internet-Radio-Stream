@@ -1,0 +1,31 @@
+{
+  "name": "internet-radio-backend",
+  "version": "2.0.0",
+  "description": "Full-Stack Internet Radio Streaming System Backend (Node.js/Express + MySQL)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node sql/seed.js"
+  },
+  "keywords": [
+    "internet-radio",
+    "streaming",
+    "express",
+    "mysql",
+    "html5-audio"
+  ],
+  "author": "Antigravity Engineering",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^13.0.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.9.7"
+  }
+}

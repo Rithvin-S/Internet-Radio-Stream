@@ -1,0 +1,98 @@
+/**
+ * Full-Stack Internet Radio Streaming System
+ * Express Application Configuration (src/app.js)
+ * Implements Security, CORS, Middleware, REST APIs & Static Frontend Serving
+ */
+
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+require('dotenv').config(); // Fallback to current working directory
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
+
+const healthRoutes = require('./routes/health');
+const stationRoutes = require('./routes/stations');
+const authRoutes = require('./routes/auth');
+const favouriteRoutes = require('./routes/favourites');
+const adminRoutes = require('./routes/admin');
+const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
+
+const app = express();
+
+// 1. Security Headers (Helmet) with relaxed Media and Script policies for Radio streaming
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:', 'http:'],
+        mediaSrc: ["'self'", 'blob:', 'https:', 'http:'],
+        connectSrc: ["'self'", 'https:', 'http:']
+      }
+    },
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  })
+);
+
+// 2. CORS Configuration (SRS NFR-02)
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : ['http://localhost:5000', 'http://localhost:8080', 'http://127.0.0.1:8080', 'http://127.0.0.1:5000'];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl/same-origin)
+      if (!origin || allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Dev relaxed
+      }
+    },
+    credentials: true
+  })
+);
+
+// 3. Body Parsers and Cookie Middleware
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(cookieParser(process.env.COOKIE_SECRET));
+
+// 4. Safe Request Logger (never logs passwords - NFR-02)
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (!req.originalUrl.startsWith('/css') && !req.originalUrl.startsWith('/js') && !req.originalUrl.startsWith('/assets')) {
+      console.log(`[API] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`);
+    }
+  });
+  next();
+});
+
+// 5. REST API Route Mounts (SRS Section 7)
+app.use('/api/health', healthRoutes);
+app.use('/api/stations', stationRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/favourites', favouriteRoutes);
+app.use('/api/admin', adminRoutes);
+
+// 6. Serve Frontend Static Assets and Pages
+const frontendPath = path.join(__dirname, '../../frontend');
+app.use(express.static(frontendPath));
+
+// Also serve root assets for backward compatibility
+app.use('/assets', express.static(path.join(__dirname, '../../assets')));
+app.use('/css', express.static(path.join(__dirname, '../../frontend/css')));
+app.use('/js', express.static(path.join(__dirname, '../../frontend/js')));
+
+// 7. 404 & Centralized Error Handlers
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+module.exports = app;
+

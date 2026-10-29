@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Station Details | PulseCast Radio</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Header -->
+    <header class="site-header" role="banner">
+      <div class="header-container">
+        <div class="brand">
+          <img src="/assets/logo.svg" alt="PulseCast Logo" class="brand-logo" width="44" height="44">
+          <div class="brand-text">
+            <span class="brand-title">PulseCast</span>
+            <span class="brand-subtitle">Station Details</span>
+          </div>
+        </div>
+
+        <nav class="site-nav" id="siteNav">
+          <a href="/index.html" class="nav-link">Live Player</a>
+          <a href="/stations.html" class="nav-link">Stations</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main -->
+    <main class="main-content" role="main">
+      <div class="player-container">
+        <div id="stationDetailContainer" class="player-card">
+          <div style="color:var(--text-muted); text-align:center; padding:2rem;">Loading station details...</div>
+        </div>
+
+        <!-- Upcoming Songs Queue Section (From MySQL) -->
+        <section class="testbench-card">
+          <div class="card-title-bar">
+            <h2>Up Next: Songs & Streams Queue</h2>
+            <span class="badge-pill" style="background:rgba(16,185,129,0.18); color:#34d399; border-color:rgba(16,185,129,0.35);">
+              MySQL Live Queue
+            </span>
+          </div>
+          <p class="section-note">Upcoming song rotation stored in the MySQL database.</p>
+          <div class="schedule-list" id="stationTracksQueue">
+            <div style="color:var(--text-muted); font-size:0.85rem;">Loading upcoming songs...</div>
+          </div>
+        </section>
+
+        <!-- Schedule Section -->
+        <section class="testbench-card">
+          <div class="card-title-bar">
+            <h2>Program Schedules</h2>
+            <span class="badge-pill">Published Broadcasts</span>
+          </div>
+          <div class="schedule-list" id="stationSchedules">
+            <div style="color:var(--text-muted); font-size:0.85rem;">Loading schedules...</div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <div class="footer-container">
+        <p>&copy; 2026 PulseCast Full-Stack Internet Radio</p>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+    (async function() {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      const container = document.getElementById('stationDetailContainer');
+      const schedContainer = document.getElementById('stationSchedules');
+
+      if (!id) {
+        container.innerHTML = '<div class="form-error-banner">No station specified. <a href="/stations.html" style="color:#ffffff;">Return to Stations</a></div>';
+        return;
+      }
+
+      try {
+        const resp = await apiClient.get(`/stations/${id}`);
+        const station = resp.data;
+
+        container.innerHTML = `
+          <div class="player-visual-area">
+            <div class="artwork-wrapper">
+              <img src="/assets/station-artwork.svg" alt="" class="station-artwork" width="200" height="200">
+            </div>
+            <div class="station-meta">
+              <div class="station-tags">
+                <span class="tag">${escapeHtml(station.genre || 'General')}</span>
+                <span class="tag">${station.is_active ? 'Active' : 'Inactive'}</span>
+              </div>
+              <h1 class="station-name">${escapeHtml(station.name)}</h1>
+              <p class="station-desc">${escapeHtml(station.description || 'Continuous online streaming audio broadcast.')}</p>
+              <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+                <a href="/index.html?station=${station.id}" class="btn-primary" style="text-decoration:none; display:inline-block;">▶ Tune In Live</a>
+                <a href="/stations.html" class="btn-secondary btn-sm" style="text-decoration:none; display:inline-flex; align-items:center;">Back to Catalogue</a>
+              </div>
+            </div>
+          </div>
+          <div class="stream-endpoint-box">
+            <span class="endpoint-label">Audio Stream Endpoint:</span>
+            <code class="stream-url-display">${escapeHtml(station.stream_url)}</code>
+          </div>
+        `;
+
+        // Schedules
+        const schedResp = await apiClient.get(`/stations/${id}/schedules`);
+        if (schedResp && schedResp.data && schedResp.data.length > 0) {
+          schedContainer.innerHTML = schedResp.data.map(s => `
+            <div class="schedule-item">
+              <div class="schedule-time">${escapeHtml(s.start_time)} - ${escapeHtml(s.end_time)}</div>
+              <div class="schedule-info">
+                <div class="schedule-title">${escapeHtml(s.title)}</div>
+                <div class="schedule-desc">${escapeHtml(s.description || '')}</div>
+              </div>
+            </div>
+          `).join('');
+        } else {
+          schedContainer.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">No published schedules for this station. Continuous broadcast.</div>';
+        }
+
+        // Upcoming Tracks from MySQL
+        const queueContainer = document.getElementById('stationTracksQueue');
+        try {
+          const trackResp = await apiClient.get(`/stations/${id}/tracks`);
+          const tracks = trackResp && trackResp.all_tracks ? trackResp.all_tracks : [];
+          if (tracks.length > 0) {
+            queueContainer.innerHTML = tracks.map(t => `
+              <div class="schedule-item" style="border-left-color: ${t.status === 'playing' ? '#10b981' : '#ec4899'};">
+                <div class="schedule-time" style="color: ${t.status === 'playing' ? '#34d399' : '#ec4899'}; min-width: 90px;">
+                  ${t.status === 'playing' ? '▶ PLAYING' : '#' + t.play_order + ' Next'}
+                </div>
+                <div class="schedule-info">
+                  <div class="schedule-title">${escapeHtml(t.title)} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">by ${escapeHtml(t.artist)}</span></div>
+                  <div class="schedule-desc">${escapeHtml(t.album ? 'Album: ' + t.album : 'Broadcast Audio Segment')}</div>
+                </div>
+                <span class="tag" style="background:rgba(255,255,255,0.06); color:var(--text-secondary);">${escapeHtml(t.duration || '03:30')}</span>
+              </div>
+            `).join('');
+          } else {
+            queueContainer.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">Continuous live stream. No queued song details in database.</div>';
+          }
+        } catch (te) {
+          queueContainer.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem;">Continuous live stream.</div>';
+        }
+      } catch (e) {
+        container.innerHTML = `<div class="form-error-banner">Station not found: ${escapeHtml(e.message)}</div>`;
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t));
+      }
+    })();
+  </script>
+</body>
+</html>
+
