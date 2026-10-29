@@ -1,7 +1,9 @@
 /**
  * Full-Stack Internet Radio Streaming System
  * Database Connector & Connection Pool (src/config/db.js)
- * Supports MySQL 8.0+ as Primary (mysql2/promise) with automatic initialization.
+ * Supports:
+ * - Production: Aiven MySQL with SSL enabled (SQLite fallback disabled)
+ * - Development/Local: Local MySQL with seamless SQLite fallback
  */
 
 const path = require('path');
@@ -17,7 +19,10 @@ let sqliteDb = null;
 let currentDbType = 'none';
 let isInitialized = false;
 
-const dbConfig = {
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Configuration for local development
+const localDbConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'root',
@@ -28,37 +33,88 @@ const dbConfig = {
   queueLimit: 0
 };
 
+// Configuration for Aiven MySQL (Production)
+const aivenDbConfig = {
+  host: process.env.AIVEN_DB_HOST || process.env.DB_HOST,
+  port: parseInt(process.env.AIVEN_DB_PORT || process.env.DB_PORT || '3306', 10),
+  user: process.env.AIVEN_DB_USER || process.env.DB_USER || 'avnadmin',
+  password: process.env.AIVEN_DB_PASSWORD || process.env.DB_PASSWORD,
+  database: process.env.AIVEN_DB_NAME || process.env.DB_NAME || 'defaultdb',
+  ssl: {
+    rejectUnauthorized: false // Enables SSL connection required by Aiven
+  },
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+};
+
 /**
- * Initialize MySQL connection pool and auto-apply schema if needed
+ * Connect to Aiven MySQL in production (SSL enabled, direct database connection)
  */
-async function tryConnectMySQL() {
+async function connectAivenMySQL() {
   try {
-    // 1. First connect without database to ensure database exists
-    const adminConnection = await mysql.createConnection({
-      host: dbConfig.host,
-      port: dbConfig.port,
-      user: dbConfig.user,
-      password: dbConfig.password
-    });
+    const config = { ...aivenDbConfig };
 
-    await adminConnection.query(
-      `CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
-    );
-    await adminConnection.end();
+    // Support full DATABASE_URL or MYSQL_URL if provided on Render
+    const connUri = process.env.AIVEN_DATABASE_URL || process.env.DATABASE_URL || process.env.MYSQL_URL;
+    if (connUri) {
+      mysqlPool = mysql.createPool({
+        uri: connUri,
+        ssl: { rejectUnauthorized: false },
+        waitForConnections: true,
+        connectionLimit: 10
+      });
+    } else {
+      mysqlPool = mysql.createPool(config);
+    }
 
-    // 2. Create the main connection pool
-    mysqlPool = mysql.createPool(dbConfig);
+    // Verify connection
     const connection = await mysqlPool.getConnection();
     connection.release();
 
     currentDbType = 'mysql';
-    console.log(`[DB] Connected successfully to MySQL (${dbConfig.user}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database})`);
+    console.log(`[DB] Connected successfully to Aiven MySQL in PRODUCTION (SSL enabled, ${config.user}@${config.host}:${config.port}/${config.database})`);
+
+    // Ensure schema and tables exist in Aiven
+    await applyMySQLSchema();
+    return true;
+  } catch (err) {
+    console.error(`[DB] FATAL: Failed to connect to Aiven MySQL in production (${err.message})`);
+    return false;
+  }
+}
+
+/**
+ * Initialize Local MySQL connection pool (Development)
+ */
+async function tryConnectLocalMySQL() {
+  try {
+    // 1. Ensure local database exists
+    const adminConnection = await mysql.createConnection({
+      host: localDbConfig.host,
+      port: localDbConfig.port,
+      user: localDbConfig.user,
+      password: localDbConfig.password
+    });
+
+    await adminConnection.query(
+      `CREATE DATABASE IF NOT EXISTS \`${localDbConfig.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+    );
+    await adminConnection.end();
+
+    // 2. Create pool for local MySQL
+    mysqlPool = mysql.createPool(localDbConfig);
+    const connection = await mysqlPool.getConnection();
+    connection.release();
+
+    currentDbType = 'mysql';
+    console.log(`[DB] Connected successfully to local MySQL (${localDbConfig.user}@${localDbConfig.host}:${localDbConfig.port}/${localDbConfig.database})`);
 
     // 3. Apply schema & seed if tables don't exist
     await applyMySQLSchema();
     return true;
   } catch (err) {
-    console.warn(`[DB] Notice: MySQL connection could not be established (${err.message}).`);
+    console.warn(`[DB] Notice: Local MySQL connection could not be established (${err.message}).`);
     return false;
   }
 }
@@ -68,7 +124,6 @@ async function tryConnectMySQL() {
  */
 async function applyMySQLSchema() {
   try {
-    // Read schema.sql
     const schemaPath = path.join(__dirname, '../../sql/schema.sql');
     if (fs.existsSync(schemaPath)) {
       const sqlContent = fs.readFileSync(schemaPath, 'utf8');
@@ -101,12 +156,15 @@ async function applyMySQLSchema() {
       }
     }
   } catch (schemaErr) {
-    console.error('[DB] Schema application warning:', schemaErr.message);
+    console.error('[DB] Schema application failed:', schemaErr.message);
+    if (isProduction) {
+      throw schemaErr;
+    }
   }
 }
 
 /**
- * Initialize SQLite fallback if MySQL is not yet configured or offline
+ * Initialize SQLite fallback if MySQL is not yet configured or offline (DEVELOPMENT ONLY)
  */
 function initSQLiteFallback() {
   try {
@@ -120,7 +178,6 @@ function initSQLiteFallback() {
     sqliteDb.pragma('journal_mode = WAL');
     sqliteDb.pragma('foreign_keys = ON');
 
-    // Create SQLite schema
     sqliteDb.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,6 +200,19 @@ function initSQLiteFallback() {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS upcoming_tracks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        station_id INTEGER NOT NULL REFERENCES stations(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        artist TEXT NOT NULL,
+        album TEXT,
+        duration TEXT DEFAULT '03:45',
+        stream_url TEXT,
+        play_order INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL DEFAULT 'queued',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS program_schedules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         station_id INTEGER NOT NULL REFERENCES stations(id) ON DELETE CASCADE,
@@ -162,46 +232,8 @@ function initSQLiteFallback() {
       );
     `);
 
-    // Check seed in SQLite
-    const userCount = sqliteDb.prepare('SELECT COUNT(*) as count FROM users').get().count;
-    if (userCount === 0) {
-      console.log('[DB] Seeding default stations and accounts into local database...');
-      
-      const insertUser = sqliteDb.prepare(`
-        INSERT OR IGNORE INTO users (id, name, email, password_hash, role)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-      insertUser.run(1, 'Station Administrator', 'admin@pulsecast.com', '$2a$10$UdPmQuU.nuFRsrWeDszGW.mhlGmFAuPIXwcP//96oLPFmhFU4MXZK', 'admin');
-      insertUser.run(2, 'Alex Rivera', 'listener@pulsecast.com', '$2a$10$XQEqmAqOwX1yQpm6Oglz.eYuZGG2RZP7OIUxZesATQDFtHGDLgSYi', 'listener');
-
-      const insertStation = sqliteDb.prepare(`
-        INSERT OR IGNORE INTO stations (id, name, description, genre, stream_url, artwork_url, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
-      insertStation.run(1, 'Radio Paradise (Main Mix)', 'High-fidelity eclectic rock, indie, world and acoustic streaming live 24/7.', 'Eclectic / Rock', 'https://stream.radioparadise.com/mp3-128', 'assets/station-artwork.svg', 1);
-      insertStation.run(2, 'Nightwave Plaza', '24/7 internet radio broadcast dedicated to vaporwave, future funk and ambient electronic soundscapes.', 'Vaporwave / Electronic', 'https://radio.plaza.one/mp3', 'assets/station-artwork.svg', 1);
-      insertStation.run(3, 'CJWF FM / Icecast 2.4 Server', 'Live stream broadcast hosted on a standard Icecast 2.4 streaming server mount.', 'Country / Hits', 'https://live.leanstream.co/CJWFFM-MP3', 'assets/station-artwork.svg', 1);
-      insertStation.run(4, 'KEXP Seattle Independent', 'Curated independent music broadcast from Seattle, Washington.', 'Alternative / Indie', 'https://kexp.streamguys1.com/kexp128.mp3', 'assets/station-artwork.svg', 1);
-      insertStation.run(5, 'SomaFM Groove Salad', 'A nicely chilled plate of ambient/downtempo beats and grooves.', 'Ambient / Downtempo', 'https://ice1.somafm.com/groovesalad-128-mp3', 'assets/station-artwork.svg', 1);
-
-      const insertSchedule = sqliteDb.prepare(`
-        INSERT OR IGNORE INTO program_schedules (station_id, title, description, start_time, end_time, is_published)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      insertSchedule.run(1, 'Morning Acoustic Awakening', 'Gentle acoustic melodies, indie folk and morning coffee accompaniment.', '08:00', '11:00', 1);
-      insertSchedule.run(1, 'World Horizon Beats', 'Eclectic world rhythms, afrobeat and international jazz explorations.', '12:00', '15:00', 1);
-      insertSchedule.run(1, 'Evening Rock Odyssey', 'Progressive rock, indie anthems and late-night album deep cuts.', '18:00', '22:00', 1);
-      insertSchedule.run(2, 'Vapor Sunset Neon', 'Chilled vaporwave synthesizers, city pop remixes and VHS aesthetics.', '17:00', '20:00', 1);
-      insertSchedule.run(2, 'Midnight Mall Grooves', 'Late-night future funk, ambient tape loops and nostalgic beats.', '22:00', '02:00', 1);
-      insertSchedule.run(3, 'Country Road Drive', 'Top country hits, road trip tracks and listener call-ins.', '09:00', '12:00', 1);
-
-      const insertFav = sqliteDb.prepare('INSERT OR IGNORE INTO favourites (user_id, station_id) VALUES (?, ?)');
-      insertFav.run(2, 1);
-      insertFav.run(2, 2);
-    }
-
     currentDbType = 'sqlite';
-    console.log('[DB] Using local SQLite fallback database (data/radio.db). To switch to MySQL, update DB_PASSWORD in .env.');
+    console.log('[DB] Using local SQLite fallback database (data/radio.db). To switch to local MySQL, update DB_PASSWORD in .env.');
     return true;
   } catch (err) {
     console.error('[DB] Failed to initialize SQLite fallback:', err.message);
@@ -211,17 +243,13 @@ function initSQLiteFallback() {
 
 /**
  * Universal Query Executor - Uses MySQL if connected, otherwise SQLite
- * Uses parameterized queries to prevent SQL injection (SRS NFR-02)
  */
 async function query(sql, params = []) {
   if (currentDbType === 'mysql' && mysqlPool) {
     const [rows, fields] = await mysqlPool.execute(sql, params);
     return rows;
   } else if (currentDbType === 'sqlite' && sqliteDb) {
-    // Translate common MySQL functions if any
     const normalizedSql = sql.replace(/\bLAST_INSERT_ID\(\)/gi, 'last_insert_rowid()');
-    
-    // Check if query is a SELECT
     const trimmed = normalizedSql.trim().toUpperCase();
     if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {
       const stmt = sqliteDb.prepare(normalizedSql);
@@ -241,15 +269,27 @@ async function query(sql, params = []) {
 
 /**
  * Initialize DB on startup
+ * - When NODE_ENV=production: connects to Aiven MySQL with SSL (SQLite fallback disabled)
+ * - Otherwise: connects to local MySQL with SQLite fallback
  */
 async function initDB() {
   if (isInitialized) return currentDbType;
-  
-  const mysqlOk = await tryConnectMySQL();
-  if (!mysqlOk) {
-    initSQLiteFallback();
+
+  if (isProduction) {
+    console.log('[DB] Production environment detected (NODE_ENV=production). Initializing Aiven MySQL with SSL...');
+    const ok = await connectAivenMySQL();
+    if (!ok) {
+      // Disable SQLite fallback in production
+      throw new Error('[DB] FATAL: Unable to connect to Aiven MySQL in production. SQLite fallback is disabled in production.');
+    }
+  } else {
+    // Local development
+    const mysqlOk = await tryConnectLocalMySQL();
+    if (!mysqlOk) {
+      initSQLiteFallback();
+    }
   }
-  
+
   isInitialized = true;
   return currentDbType;
 }
@@ -258,11 +298,14 @@ async function initDB() {
  * Get DB status for /api/health
  */
 function getDBStatus() {
+  const activeConfig = isProduction ? aivenDbConfig : localDbConfig;
   return {
     type: currentDbType,
     isReady: isInitialized && currentDbType !== 'none',
-    host: currentDbType === 'mysql' ? dbConfig.host : 'local_file',
-    database: currentDbType === 'mysql' ? dbConfig.database : 'data/radio.db'
+    mode: isProduction ? 'production (aiven)' : 'development (local)',
+    ssl: isProduction,
+    host: currentDbType === 'mysql' ? activeConfig.host : 'local_file',
+    database: currentDbType === 'mysql' ? activeConfig.database : 'data/radio.db'
   };
 }
 
@@ -272,4 +315,3 @@ module.exports = {
   getDBStatus,
   getPool: () => mysqlPool
 };
-

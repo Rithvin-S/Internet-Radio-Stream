@@ -21,6 +21,9 @@ const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
+// Enable trust proxy for Render / Vercel cloud deployment
+app.set('trust proxy', 1);
+
 // 1. Security Headers (Helmet) with relaxed Media and Script policies for Radio streaming
 app.use(
   helmet({
@@ -38,22 +41,48 @@ app.use(
   })
 );
 
-// 2. CORS Configuration (SRS NFR-02)
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
-  : ['http://localhost:5000', 'http://localhost:8080', 'http://127.0.0.1:8080', 'http://127.0.0.1:5000'];
+// 2. CORS Configuration (Allows Vercel Frontend & Local Development)
+const defaultOrigins = [
+  'http://localhost:5000',
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'http://127.0.0.1:5000'
+];
+
+const envOrigins = (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const allowedOriginsList = [...defaultOrigins, ...envOrigins];
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl/same-origin)
-      if (!origin || allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
-        callback(null, true);
-      } else {
-        callback(null, true); // Dev relaxed
+      // Allow requests with no origin (e.g. mobile apps, same-origin, curl)
+      if (!origin) return callback(null, true);
+
+      // 1. Explicitly configured origins (from CORS_ORIGIN or FRONTEND_URL env var)
+      if (allowedOriginsList.includes(origin) || allowedOriginsList.includes('*')) {
+        return callback(null, true);
       }
+
+      // 2. Allow all deployed Vercel frontend URLs (*.vercel.app)
+      if (/^https:\/\/[a-zA-Z0-9_.-]+\.vercel\.app$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      // 3. Allow local development origins
+      if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      console.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
   })
 );
 

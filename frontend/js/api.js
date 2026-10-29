@@ -4,10 +4,16 @@
  * Implements centralized HTTP requests with credentials and error handling (FR-15, NFR-02)
  */
 
-// Support both integrated serving (port 5000) and separate frontend server (e.g. port 8080)
-const API_BASE = (window.location.port === '5000')
-  ? '/api'
-  : 'http://localhost:5000/api';
+// Detect local development environment
+const isLocal =
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.protocol === 'file:';
+
+// Set production API base URL to Render deployment, while preserving local development support
+const API_BASE = isLocal
+  ? (window.location.port === '5000' ? '/api' : 'http://localhost:5000/api')
+  : 'https://internet-radio-stream.onrender.com/api';
 
 const apiClient = {
   getToken() {
