@@ -219,7 +219,17 @@
     state.isLoading = true;
     setPlayerState('loading', 'Connecting', `Connecting to ${state.currentStation.name}...`);
     logMessage(`Attempting audio playback for ${state.currentStation.stream_url}`, 'event');
+    const streamUrl = new URL(
+      state.currentStation.stream_url,
+      window.location.href
+    );
 
+    if (streamUrl.pathname.endsWith('/pulsecast.mp3')) {
+      streamUrl.searchParams.set('_live', Date.now().toString());
+    }
+
+    elements.audio.src = streamUrl.href;
+    elements.audio.load();
     const playPromise = elements.audio.play();
     if (playPromise !== undefined) {
       playPromise
@@ -241,11 +251,21 @@
   }
 
   function pausePlayback() {
-    logMessage('Audio playback paused.', 'pause');
+    logMessage('Listener disconnected from live stream.', 'pause');
+
     elements.audio.pause();
+    elements.audio.removeAttribute('src');
+    elements.audio.load();
+
     state.isPlaying = false;
     state.isLoading = false;
-    setPlayerState('paused', 'Paused', 'Stream paused. Click Play or Resume to continue.', false);
+
+    setPlayerState(
+      'paused',
+      'Paused',
+      'Disconnected from live radio. Click Play to reconnect live.',
+      false
+    );
   }
 
   function togglePlayPause() {
