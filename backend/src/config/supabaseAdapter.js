@@ -54,7 +54,6 @@ async function executeSupabaseQuery(sql, params = []) {
   }
 
   if (upper.startsWith('INSERT INTO USERS')) {
-    // (name, email, password_hash, role)
     const payload = {
       name: params[0],
       email: params[1],
@@ -85,12 +84,10 @@ async function executeSupabaseQuery(sql, params = []) {
 
     let query = supabase.from('stations').select('*');
 
-    // Active filter
     if (upper.includes('IS_ACTIVE = 1') || upper.includes('IS_ACTIVE = TRUE')) {
       query = query.eq('is_active', true);
     }
 
-    // Genre filter
     if (upper.includes('LOWER(GENRE) LIKE ?')) {
       const genreParam = params.find(p => typeof p === 'string' && p.startsWith('%') && p.endsWith('%'));
       const cleanGenre = genreParam ? genreParam.replace(/%/g, '') : '';
@@ -99,7 +96,6 @@ async function executeSupabaseQuery(sql, params = []) {
       }
     }
 
-    // Search filter
     if (upper.includes('LOWER(NAME) LIKE ?') || upper.includes('LOWER(DESCRIPTION) LIKE ?')) {
       const searchParam = params[params.length - 1];
       const cleanSearch = searchParam ? searchParam.replace(/%/g, '') : '';
@@ -115,7 +111,6 @@ async function executeSupabaseQuery(sql, params = []) {
   }
 
   if (upper.startsWith('INSERT INTO STATIONS')) {
-    // (name, description, genre, stream_url, artwork_url, is_active)
     const payload = {
       name: params[0],
       description: params[1],
@@ -134,7 +129,6 @@ async function executeSupabaseQuery(sql, params = []) {
   }
 
   if (upper.startsWith('UPDATE STATIONS SET NAME =')) {
-    // name = ?, description = ?, genre = ?, stream_url = ?, artwork_url = ?, is_active = ? WHERE id = ?
     const payload = {
       name: params[0],
       description: params[1],
@@ -206,7 +200,6 @@ async function executeSupabaseQuery(sql, params = []) {
   }
 
   if (upper.startsWith('UPDATE UPCOMING_TRACKS SET STATUS =') && upper.includes('WHERE STATION_ID = ? AND STATUS =')) {
-    // Update existing playing tracks to 'played' or 'queued'
     const newStatus = upper.includes("STATUS = 'PLAYED'") ? 'played' : 'queued';
     const { error } = await supabase
       .from('upcoming_tracks')
@@ -218,7 +211,6 @@ async function executeSupabaseQuery(sql, params = []) {
   }
 
   if (upper.startsWith('INSERT INTO UPCOMING_TRACKS')) {
-    // (station_id, title, artist, album, duration, stream_url, play_order, status)
     const payload = {
       station_id: params[0],
       title: params[1],
@@ -280,7 +272,6 @@ async function executeSupabaseQuery(sql, params = []) {
   }
 
   if (upper.startsWith('INSERT INTO PROGRAM_SCHEDULES')) {
-    // (station_id, title, description, start_time, end_time, is_published)
     const payload = {
       station_id: params[0],
       title: params[1],
@@ -299,7 +290,6 @@ async function executeSupabaseQuery(sql, params = []) {
   }
 
   if (upper.startsWith('UPDATE PROGRAM_SCHEDULES SET TITLE = ?')) {
-    // title = ?, description = ?, start_time = ?, end_time = ?, is_published = ? WHERE id = ?
     const payload = {
       title: params[0],
       description: params[1],
@@ -312,6 +302,15 @@ async function executeSupabaseQuery(sql, params = []) {
       .from('program_schedules')
       .update(payload)
       .eq('id', id);
+    if (error) throw new Error(error.message);
+    return { affectedRows: 1 };
+  }
+
+  if (upper.startsWith('UPDATE PROGRAM_SCHEDULES SET IS_PUBLISHED = ? WHERE ID = ?')) {
+    const { error } = await supabase
+      .from('program_schedules')
+      .update({ is_published: Boolean(params[0]) })
+      .eq('id', params[1]);
     if (error) throw new Error(error.message);
     return { affectedRows: 1 };
   }
@@ -338,7 +337,6 @@ async function executeSupabaseQuery(sql, params = []) {
 
     if (error) throw new Error(error.message);
 
-    // Flatten to match MySQL join structure
     const flattened = (data || [])
       .filter(item => item.stations && (item.stations.is_active === true || item.stations.is_active === 1))
       .map(item => ({
@@ -387,7 +385,7 @@ async function executeSupabaseQuery(sql, params = []) {
     return { affectedRows: 1 };
   }
 
-  // Fallback if not specifically caught
+  // Fallback
   console.warn(`[SUPABASE] Unmapped SQL pattern encountered: "${sql}"`);
   throw new Error(`Unmapped query pattern for Supabase: ${sql}`);
 }
