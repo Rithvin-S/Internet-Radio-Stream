@@ -38,7 +38,7 @@
         <section class="testbench-card">
           <div class="card-title-bar">
             <h2>Up Next: Songs & Streams Queue</h2>
-            <span class="badge-pill" style="background:rgba(16,185,129,0.18); color:#34d399; border-color:rgba(16,185,129,0.35);">
+            <span class="badge-pill" style="background:rgba(16,185,129,0.12); color:#047857; border-color:rgba(16,185,129,0.3);">
               MySQL Live Queue
             </span>
           </div>
@@ -79,7 +79,7 @@
       const schedContainer = document.getElementById('stationSchedules');
 
       if (!id) {
-        container.innerHTML = '<div class="form-error-banner">No station specified. <a href="/stations.html" style="color:#ffffff;">Return to Stations</a></div>';
+        container.innerHTML = '<div class="form-error-banner">No station specified. <a href="/stations.html" style="color:var(--primary); font-weight:600;">Return to Stations</a></div>';
         return;
       }
 
@@ -134,15 +134,15 @@
           const tracks = trackResp && trackResp.all_tracks ? trackResp.all_tracks : [];
           if (tracks.length > 0) {
             queueContainer.innerHTML = tracks.map(t => `
-              <div class="schedule-item" style="border-left-color: ${t.status === 'playing' ? '#10b981' : '#ec4899'};">
-                <div class="schedule-time" style="color: ${t.status === 'playing' ? '#34d399' : '#ec4899'}; min-width: 90px;">
+              <div class="schedule-item" style="border-left-color: ${t.status === 'playing' ? '#10b981' : '#db2777'};">
+                <div class="schedule-time" style="color: ${t.status === 'playing' ? '#047857' : '#db2777'}; min-width: 90px;">
                   ${t.status === 'playing' ? '▶ PLAYING' : '#' + t.play_order + ' Next'}
                 </div>
                 <div class="schedule-info">
                   <div class="schedule-title">${escapeHtml(t.title)} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">by ${escapeHtml(t.artist)}</span></div>
                   <div class="schedule-desc">${escapeHtml(t.album ? 'Album: ' + t.album : 'Broadcast Audio Segment')}</div>
                 </div>
-                <span class="tag" style="background:rgba(255,255,255,0.06); color:var(--text-secondary);">${escapeHtml(t.duration || '03:30')}</span>
+                <span class="tag" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); color:var(--text-secondary);">${escapeHtml(t.duration || '03:30')}</span>
               </div>
             `).join('');
           } else {

@@ -190,15 +190,15 @@
         queueList.innerHTML = upNext
           .map(
             (track, idx) => `
-          <div class="schedule-item" style="border-left-color: #ec4899;">
-            <div class="schedule-time" style="color: #ec4899; min-width: 80px;">
+          <div class="schedule-item" style="border-left-color: #db2777;">
+            <div class="schedule-time" style="color: #db2777; min-width: 80px;">
               #${idx + 1} Next
             </div>
             <div class="schedule-info">
               <div class="schedule-title">${escapeHtml(track.title)} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">by ${escapeHtml(track.artist)}</span></div>
               <div class="schedule-desc">${escapeHtml(track.album ? 'Album: ' + track.album : 'Upcoming stream segment')}</div>
             </div>
-            <span class="tag" style="background:rgba(255,255,255,0.06); color:var(--text-secondary);">${escapeHtml(track.duration || '03:30')}</span>
+            <span class="tag" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); color:var(--text-secondary);">${escapeHtml(track.duration || '03:30')}</span>
           </div>
         `
           )

@@ -25,13 +25,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  background: rgba(15, 23, 42, 0.94);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 0.85rem 1.25rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
 }
 
 .calendar-nav-group {
@@ -83,7 +83,7 @@
 .view-btn.active {
   background: var(--primary);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.45);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
 }
 
 /* Filter Controls */
@@ -99,7 +99,7 @@
 }
 
 .calendar-filter-select:focus {
-  outline: 2px solid var(--accent-cyan);
+  outline: 2px solid var(--primary);
   border-color: transparent;
 }
 
@@ -153,16 +153,16 @@
 }
 
 .month-day-cell:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-hover);
 }
 
 .month-day-cell.other-month {
-  background: rgba(15, 23, 42, 0.6);
-  opacity: 0.4;
+  background: #F8FAFC;
+  opacity: 0.6;
 }
 
 .month-day-cell.is-today {
-  background: rgba(99, 102, 241, 0.04);
+  background: rgba(79, 70, 229, 0.05);
 }
 
 .month-day-cell.is-today .day-number {
@@ -175,7 +175,7 @@
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 10px rgba(79, 70, 229, 0.4);
 }
 
 .day-header {
@@ -208,7 +208,8 @@
   border-radius: 5px;
   font-size: 0.74rem;
   font-weight: 600;
-  background: var(--bg-surface-elevated);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-left: 3.5px solid var(--accent-cyan);
   color: var(--text-primary);
   white-space: nowrap;
@@ -216,13 +217,12 @@
   text-overflow: ellipsis;
   cursor: pointer;
   transition: transform var(--transition-fast), filter var(--transition-fast), box-shadow var(--transition-fast);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
 .event-chip:hover {
-  filter: brightness(1.25);
   transform: translateY(-1px);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.12);
 }
 
 .event-chip.draft {
@@ -253,18 +253,18 @@
   font-size: 0.62rem;
   padding: 0.1rem 0.3rem;
   border-radius: 3px;
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
   margin-left: auto;
 }
 
 .overflow-pill {
   font-size: 0.7rem;
-  color: var(--accent-cyan);
+  color: #0891b2;
   font-weight: 700;
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
-  background: rgba(6, 182, 212, 0.1);
+  background: rgba(6, 182, 212, 0.12);
   display: inline-block;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -293,10 +293,10 @@
   top: 68px; /* Sticks right below the sticky toolbar */
   z-index: 80;
   display: flex;
-  background: rgba(30, 41, 59, 0.96);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .timeline-time-col-header {
@@ -346,7 +346,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 10px rgba(79, 70, 229, 0.4);
 }
 
 .timeline-body {
@@ -359,7 +359,7 @@
   width: 68px;
   flex-shrink: 0;
   border-right: 1px solid var(--border-subtle);
-  background: rgba(15, 23, 42, 0.4);
+  background: var(--bg-surface-elevated);
 }
 
 .timeline-hour-label {
@@ -384,10 +384,10 @@
   min-width: 140px;
   position: relative;
   border-right: 1px solid var(--border-subtle);
-  /* 60px solid line for hour + 30px dashed line for half-hour */
+  /* 60px solid line for hour + 30px subtle line for half-hour */
   background-image: 
     linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(to bottom, rgba(226, 232, 240, 0.5) 1px, transparent 1px);
   background-size: 100% 60px, 100% 30px;
   transition: background-color var(--transition-fast);
 }
@@ -397,7 +397,7 @@
 }
 
 .timeline-day-column.drag-over {
-  background-color: rgba(99, 102, 241, 0.12);
+  background-color: var(--bg-selected);
   outline: 2px dashed var(--primary);
   outline-offset: -2px;
 }
@@ -449,9 +449,9 @@
   font-size: 0.76rem;
   overflow: hidden;
   cursor: grab;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
   border-left: 4px solid var(--accent-cyan);
-  background: var(--bg-surface-elevated);
+  background: #ffffff;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
   z-index: 10;
   user-select: none;
@@ -464,7 +464,7 @@
 .timeline-event-block:hover {
   transform: scale(1.02);
   z-index: 40;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
 }
 
 .timeline-event-block.dragging {
@@ -499,7 +499,7 @@
 .event-block-station {
   display: inline-block;
   padding: 0.1rem 0.35rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(79, 70, 229, 0.08);
   border-radius: 3px;
   font-weight: 700;
 }
@@ -527,7 +527,7 @@
   left: 4px;
   right: 4px;
   border: 2px dashed var(--accent-cyan);
-  background: rgba(6, 182, 212, 0.15);
+  background: rgba(6, 182, 212, 0.12);
   border-radius: 6px;
   pointer-events: none;
   z-index: 25;
@@ -545,7 +545,7 @@
 .details-drawer-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(15, 23, 42, 0.5);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   z-index: 1000;
@@ -566,8 +566,8 @@
   max-width: 92vw;
   height: 100vh;
   background: var(--bg-surface);
-  border-left: 1px solid var(--border-strong);
-  box-shadow: -12px 0 36px rgba(0, 0, 0, 0.7);
+  border-left: 1px solid var(--border-subtle);
+  box-shadow: -8px 0 28px rgba(15, 23, 42, 0.12);
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
@@ -597,7 +597,7 @@
 .drawer-station-tag {
   font-size: 0.8rem;
   font-weight: 700;
-  color: var(--accent-cyan);
+  color: var(--primary);
   margin-bottom: 0.25rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -631,7 +631,7 @@
 
 .btn-close-drawer:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
 }
 
 .drawer-body {
@@ -679,7 +679,7 @@
 .drawer-card-sub {
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--accent-cyan);
+  color: var(--primary);
   font-family: var(--font-mono);
 }
 
@@ -687,7 +687,8 @@
   font-size: 0.75rem;
   font-weight: 700;
   padding: 0.25rem 0.5rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   color: var(--text-secondary);
 }
@@ -711,9 +712,9 @@
 .category-tag {
   display: inline-block;
   padding: 0.25rem 0.65rem;
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px solid rgba(99, 102, 241, 0.4);
-  color: #a5b4fc;
+  background: rgba(79, 70, 229, 0.1);
+  border: 1px solid rgba(79, 70, 229, 0.25);
+  color: var(--primary);
   border-radius: 4px;
   font-size: 0.85rem;
   font-weight: 600;
@@ -723,7 +724,7 @@
   color: var(--text-secondary);
   font-size: 0.9rem;
   line-height: 1.55;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-surface-elevated);
   padding: 0.75rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
@@ -760,7 +761,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(15, 23, 42, 0.6);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   display: flex;
@@ -772,7 +773,7 @@
 
 .modal-dialog {
   background: var(--bg-surface);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 650px;
@@ -858,7 +859,7 @@
   top: 100%;
   left: 0;
   right: 0;
-  background: var(--bg-surface-elevated);
+  background: var(--bg-surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   max-height: 220px;
@@ -896,7 +897,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   gap: 0.6rem;
@@ -904,7 +905,7 @@
 
 .song-order-num {
   font-weight: 700;
-  color: var(--accent-cyan);
+  color: var(--primary);
   font-size: 0.8rem;
   width: 24px;
 }
@@ -931,7 +932,8 @@
   font-size: 0.75rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
   padding: 0.2rem 0.4rem;
   border-radius: 4px;
 }
@@ -954,7 +956,7 @@
 
 .btn-icon:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-hover);
 }
 
 .btn-icon.delete:hover {
@@ -975,11 +977,11 @@
    7. Conflict Alert Box
    -------------------------------------------------------------------------- */
 .conflict-alert {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid #ef4444;
+  background: var(--state-error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
-  color: #fca5a5;
+  color: #dc2626;
   font-size: 0.85rem;
   display: flex;
   align-items: flex-start;
@@ -998,12 +1000,12 @@
   position: fixed;
   bottom: 2rem;
   right: 2rem;
-  background: var(--bg-surface-elevated);
+  background: var(--bg-surface);
   border: 1px solid var(--border-strong);
   color: var(--text-primary);
   padding: 0.75rem 1.25rem;
   border-radius: var(--radius-sm);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -1024,14 +1026,14 @@
 
 .calendar-toast.error {
   border-color: #ef4444;
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
+  background: var(--state-error-bg);
+  color: #dc2626;
 }
 
 .calendar-toast.success {
   border-color: #10b981;
-  background: rgba(16, 185, 129, 0.15);
-  color: #6ee7b7;
+  background: var(--state-playing-bg);
+  color: #047857;
 }
 
 /* --------------------------------------------------------------------------

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="PulseCast Full-Stack Internet Radio Streaming System with Node.js/Express and MySQL.">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#F4F7FC">
   <title>PulseCast Radio | Full-Stack Internet Radio</title>
   <link rel="stylesheet" href="/css/styles.css">
   <link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
@@ -172,7 +172,7 @@
         <section class="testbench-card" id="upcomingTracksSection" aria-label="Upcoming Songs and Streams">
           <div class="card-title-bar">
             <h2>Up Next: Songs & Streams to be Played Next</h2>
-            <span class="badge-pill" style="background:rgba(16,185,129,0.18); color:#34d399; border-color:rgba(16,185,129,0.35);">
+            <span class="badge-pill" style="background:rgba(16,185,129,0.12); color:#047857; border-color:rgba(16,185,129,0.3);">
               MySQL Live Queue
             </span>
           </div>
@@ -181,16 +181,16 @@
           </p>
 
           <!-- Current Song Spotlight Box -->
-          <div id="nowPlayingTrackBox" style="background:linear-gradient(135deg, rgba(99,102,241,0.14), rgba(236,72,153,0.14)); border:1px solid rgba(99,102,241,0.3); border-radius:var(--radius-md); padding:1rem 1.25rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+          <div id="nowPlayingTrackBox" style="background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:1rem 1.25rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
             <div style="display:flex; align-items:center; gap:0.85rem;">
               <span style="font-size:1.6rem;">🎵</span>
               <div>
-                <span style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:#38bdf8; font-weight:700;">Now Playing Track</span>
-                <div id="nowPlayingTrackTitle" style="font-size:1.1rem; font-weight:800; color:#ffffff;">Loading song title...</div>
+                <span style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.06em; color:#0891b2; font-weight:700;">Now Playing Track</span>
+                <div id="nowPlayingTrackTitle" style="font-size:1.1rem; font-weight:800; color:var(--text-primary);">Loading song title...</div>
                 <div id="nowPlayingTrackArtist" style="font-size:0.85rem; color:var(--text-secondary);">Connecting to station tracklist...</div>
               </div>
             </div>
-            <span class="tag" id="nowPlayingTrackDuration" style="background:rgba(56,189,248,0.15); color:#38bdf8; font-size:0.75rem;">--:--</span>
+            <span class="tag" id="nowPlayingTrackDuration" style="background:rgba(6, 182, 212, 0.12); color:#0891b2; font-size:0.75rem;">--:--</span>
           </div>
 
           <!-- Upcoming Songs Queue List -->

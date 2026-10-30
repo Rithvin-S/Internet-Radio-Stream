@@ -48,7 +48,7 @@
             <div style="font-size:0.75rem; color:var(--text-secondary);">${escapeHtml(s.description || '')}</div>
           </td>
           <td><span class="tag">${escapeHtml(s.genre || 'General')}</span></td>
-          <td><code style="font-size:0.75rem; color:#38bdf8;">${escapeHtml(s.stream_url)}</code></td>
+          <td><code style="font-size:0.75rem; color:var(--primary);">${escapeHtml(s.stream_url)}</code></td>
           <td>
             <span class="badge-status ${s.is_active ? 'active' : 'inactive'}">
               ${s.is_active ? 'Active' : 'Inactive'}
@@ -71,7 +71,7 @@
 
       attachStationActionHandlers();
     } catch (err) {
-      tableBody.innerHTML = `<tr><td colspan="6" style="color:#f87171; padding:1.5rem;">Error loading stations: ${escapeHtml(err.message)}</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="6" style="color:var(--state-error); padding:1.5rem;">Error loading stations: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 
@@ -219,7 +219,7 @@
         });
       });
     } catch (e) {
-      tableBody.innerHTML = `<tr><td colspan="5" style="color:#f87171; padding:1.5rem;">Error: ${escapeHtml(e.message)}</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="5" style="color:var(--state-error); padding:1.5rem;">Error: ${escapeHtml(e.message)}</td></tr>`;
     }
   }
 

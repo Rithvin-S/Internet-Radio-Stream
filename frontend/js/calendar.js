@@ -26,15 +26,15 @@
   let draggedDurationMinutes = 60;
   let draggedStationId = null;
 
-  // Harmonious station palette with rich contrast
+  // Harmonious station palette with rich contrast (Aurora Light theme compliant)
   const STATION_PALETTE = [
-    { border: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)', text: '#38bdf8' },  // Cyan
-    { border: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)', text: '#c084fc' }, // Purple
-    { border: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', text: '#34d399' }, // Emerald
-    { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', text: '#fbbf24' }, // Amber
-    { border: '#ec4899', bg: 'rgba(236, 72, 153, 0.15)', text: '#f472b6' }, // Pink
-    { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)', text: '#60a5fa' }, // Blue
-    { border: '#f97316', bg: 'rgba(249, 115, 22, 0.15)', text: '#fb923c' }  // Orange
+    { border: '#0891b2', bg: 'rgba(6, 182, 212, 0.12)', text: '#0e7490' },  // Cyan
+    { border: '#9333ea', bg: 'rgba(168, 85, 247, 0.12)', text: '#7e22ce' }, // Purple
+    { border: '#059669', bg: 'rgba(16, 185, 129, 0.12)', text: '#047857' }, // Emerald
+    { border: '#d97706', bg: 'rgba(245, 158, 11, 0.12)', text: '#b45309' }, // Amber
+    { border: '#db2777', bg: 'rgba(236, 72, 153, 0.12)', text: '#be185d' }, // Pink
+    { border: '#2563eb', bg: 'rgba(59, 130, 246, 0.12)', text: '#1d4ed8' }, // Blue
+    { border: '#ea580c', bg: 'rgba(249, 115, 22, 0.12)', text: '#c2410c' }  // Orange
   ];
 
   function getStationColorConfig(stationId) {
