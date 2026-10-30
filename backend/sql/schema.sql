@@ -4,11 +4,11 @@
 -- MySQL 8.0+ Compatible - SRS v2.0 Compliant
 -- ============================================================================
 
-CREATE DATABASE IF NOT EXISTS internet_radio
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
+-- CREATE DATABASE IF NOT EXISTS internet_radio
+--   CHARACTER SET utf8mb4
+--   COLLATE utf8mb4_unicode_ci;
 
-USE internet_radio;
+-- USE internet_radio;
 
 -- ----------------------------------------------------------------------------
 -- Table: users
