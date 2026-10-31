@@ -521,6 +521,15 @@
   // --------------------------------------------------------------------------
   // Interactions (Month, Timeline, Drag-and-Drop)
   // --------------------------------------------------------------------------
+  async function switchToDayView(dateKey) {
+    if (!dateKey) return;
+    currentDate = parseDateKey(dateKey);
+    currentView = 'day';
+    updateViewButtons();
+    renderCalendar();
+    await loadSchedules();
+  }
+
   function attachMonthInteractions() {
     // Click on event chip -> Slide-over Details Drawer
     document.querySelectorAll('.event-chip').forEach((chip) => {
@@ -531,11 +540,18 @@
       });
     });
 
-    // Click on empty day cell -> Create Modal with that date
+    // Click on month day cell (date number or empty area) -> Switch to Day view
     document.querySelectorAll('.month-day-cell').forEach((cell) => {
-      cell.addEventListener('click', () => {
+      cell.addEventListener('click', (e) => {
+        // Do not trigger date navigation if an event chip or other interactive element was clicked
+        if (e.target.closest('.event-chip, button, a, input, select, textarea')) {
+          return;
+        }
+
         const dateKey = cell.getAttribute('data-date');
-        openCreateModal(dateKey, '09:00', '10:00');
+        if (dateKey) {
+          switchToDayView(dateKey);
+        }
       });
     });
 
@@ -544,10 +560,9 @@
       pill.addEventListener('click', (e) => {
         e.stopPropagation();
         const dateKey = pill.getAttribute('data-date');
-        currentDate = parseDateKey(dateKey);
-        currentView = 'day';
-        updateViewButtons();
-        renderCalendar();
+        if (dateKey) {
+          switchToDayView(dateKey);
+        }
       });
     });
   }
