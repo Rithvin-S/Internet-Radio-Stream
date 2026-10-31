@@ -26,6 +26,137 @@ const BUCKET_NAME = 'pulsecast-music-library';
 const memorySongs = new Map();
 const memoryScheduleTracks = new Map(); // scheduleId -> Array of tracks
 
+// Pre-calculated hashes for existing 7 library songs (SHA-256)
+const KNOWN_EXISTING_HASHES = new Map([
+  ['1a3825f2-1b65-4615-9f03-c42722d73551', '5ffb16cb0285a508d4a5e80fc0c88e10f328b3f28a9a4c77178790b87767126c'],
+  ['fcc125ce-48a7-4b4b-8e88-dea1f7163b93', '5ffb16cb0285a508d4a5e80fc0c88e10f328b3f28a9a4c77178790b87767126c'],
+  ['757758c5-3e4d-4d38-b647-978fe7b124c8', '5ffb16cb0285a508d4a5e80fc0c88e10f328b3f28a9a4c77178790b87767126c'],
+  ['416f5948-3b51-405c-a16b-d01594d11840', '9678589c145ddcb07eeabd03a4b7517fe0fe7481413eb5793abfe3b2c3747f10'],
+  ['a8abd023-8175-4459-8470-647279902798', '9678589c145ddcb07eeabd03a4b7517fe0fe7481413eb5793abfe3b2c3747f10'],
+  ['0528db8a-f0c4-42d7-8915-223d7f839c93', 'b29ee2e9abfbd38a962d9a2a0838a4dbe34db6f62649fd714406390b9633d209'],
+  ['670b66e7-3bf6-4d55-b8ac-a65bc09d6160', '210fb64a586c236f747409743aa01b9a350eb610e6878ee5f55c88146a42c855']
+]);
+
+// Track in-flight uploads to prevent concurrent race conditions
+const inFlightUploads = new Set();
+
+/**
+ * Normalize filename for consistent case-insensitive and trimmed comparison
+ */
+function normalizeFilename(filename) {
+  if (!filename || typeof filename !== 'string') return '';
+  return filename
+    .trim()
+    .toLowerCase()
+    .normalize('NFC')
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * Calculate SHA-256 cryptographic hash of audio buffer
+ */
+function calculateFileHash(buffer) {
+  if (!buffer) return null;
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+/**
+ * Check whether a song with the same normalized filename or SHA-256 content hash exists
+ * Checks both active and archived songs across the database and in-memory fallback.
+ */
+async function checkDuplicateSong({ filename, hash, excludeId = null }) {
+  const supabase = getSupabase();
+  const normName = normalizeFilename(filename);
+
+  if (supabase) {
+    try {
+      // Query all songs (active AND archived)
+      const { data: allSongs, error } = await supabase
+        .from('songs')
+        .select('*');
+
+      if (!error && Array.isArray(allSongs)) {
+        // 1. Filename duplicate check (case-insensitive, trimmed, normalized)
+        if (normName) {
+          const filenameMatch = allSongs.find((s) => {
+            if (excludeId && s.id === excludeId) return false;
+            return normalizeFilename(s.original_filename) === normName;
+          });
+
+          if (filenameMatch) {
+            return {
+              isDuplicate: true,
+              type: 'filename',
+              message: 'This song already exists in your library.',
+              existingSong: {
+                id: filenameMatch.id,
+                title: filenameMatch.title,
+                artist: filenameMatch.artist || 'Unknown Artist',
+                album: filenameMatch.album || '',
+                original_filename: filenameMatch.original_filename,
+                created_at: filenameMatch.created_at,
+                is_active: filenameMatch.is_active
+              }
+            };
+          }
+        }
+
+        // 2. Content hash duplicate check (SHA-256)
+        if (hash) {
+          const targetHash = hash.toLowerCase();
+          const hashMatch = allSongs.find((s) => {
+            if (excludeId && s.id === excludeId) return false;
+            const songHash = (s.file_hash || KNOWN_EXISTING_HASHES.get(s.id) || '').toLowerCase();
+            return songHash === targetHash;
+          });
+
+          if (hashMatch) {
+            return {
+              isDuplicate: true,
+              type: 'content',
+              message: `This audio content already exists in your library as "${hashMatch.title}" (${hashMatch.original_filename}).`,
+              existingSong: {
+                id: hashMatch.id,
+                title: hashMatch.title,
+                artist: hashMatch.artist || 'Unknown Artist',
+                album: hashMatch.album || '',
+                original_filename: hashMatch.original_filename,
+                created_at: hashMatch.created_at,
+                is_active: hashMatch.is_active
+              }
+            };
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[SONG_SERVICE] checkDuplicateSong DB check notice:', err.message);
+    }
+  }
+
+  // Also check memorySongs fallback
+  for (const s of memorySongs.values()) {
+    if (excludeId && s.id === excludeId) continue;
+    if (normName && normalizeFilename(s.original_filename) === normName) {
+      return {
+        isDuplicate: true,
+        type: 'filename',
+        message: 'This song already exists in your library.',
+        existingSong: s
+      };
+    }
+    if (hash && s.file_hash && s.file_hash.toLowerCase() === hash.toLowerCase()) {
+      return {
+        isDuplicate: true,
+        type: 'content',
+        message: `This audio content already exists in your library as "${s.title}" (${s.original_filename}).`,
+        existingSong: s
+      };
+    }
+  }
+
+  return { isDuplicate: false };
+}
+
 /**
  * Check if a Supabase error is caused by missing database table
  */
@@ -217,6 +348,7 @@ async function getSongById(id) {
 
 /**
  * Upload a single song to Supabase Storage and register metadata row
+ * Enforces pre-upload duplicate checks (normalized filename and SHA-256 hash)
  */
 async function uploadSingleSong({ file, title, artist, album, userId = null }) {
   // 1. Validation
@@ -230,131 +362,279 @@ async function uploadSingleSong({ file, title, artist, album, userId = null }) {
     throw new Error('Supabase client is not configured.');
   }
 
-  // 2. Prepare paths and identifiers
-  const songId = crypto.randomUUID();
-  const safeFilename = sanitizeFilename(file.originalname);
-  const storagePath = `library/${songId}/${safeFilename}`;
-  const mimeType = file.mimetype || 'audio/mpeg';
-  const sizeBytes = file.size || file.buffer.length;
+  // 2. Content Hashing & Filename Normalization
+  const normName = normalizeFilename(file.originalname);
+  const fileHash = calculateFileHash(file.buffer);
 
-  // 3. Extract audio metadata (ID3 tags / duration)
-  const extracted = await extractAudioMetadata(file.buffer, file.originalname, mimeType);
+  // 3. Concurrency / In-Flight Race Condition Protection
+  const nameLock = `name:${normName}`;
+  const hashLock = `hash:${fileHash}`;
 
-  const finalTitle = (title && title.trim()) || extracted.title || 'Untitled Track';
-  const finalArtist = (artist && artist.trim()) || extracted.artist || null;
-  const finalAlbum = (album && album.trim()) || extracted.album || null;
-  const durationSeconds = extracted.durationSeconds || 0;
-  const duration = extracted.duration || formatDuration(durationSeconds);
-
-  // 4. Upload binary audio to Supabase Storage (private bucket)
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET_NAME)
-    .upload(storagePath, file.buffer, {
-      contentType: mimeType,
-      upsert: false
-    });
-
-  if (uploadError) {
-    console.error('[SONG_SERVICE] Supabase Storage upload failed:', uploadError.message);
-    throw new Error(`Storage upload failed: ${uploadError.message}`);
+  if (inFlightUploads.has(nameLock) || inFlightUploads.has(hashLock)) {
+    const error = new Error('Another upload with identical filename or audio content is currently in progress.');
+    error.status = 409;
+    error.conflict = true;
+    error.duplicateType = inFlightUploads.has(nameLock) ? 'filename' : 'content';
+    throw error;
   }
 
-  // 5. Insert metadata into public.songs
-  const songRecord = {
-    id: songId,
-    title: finalTitle,
-    artist: finalArtist,
-    album: finalAlbum,
-    duration_seconds: durationSeconds,
-    duration,
-    mime_type: mimeType,
-    file_size_bytes: sizeBytes,
-    storage_bucket: BUCKET_NAME,
-    storage_path: storagePath,
-    original_filename: file.originalname,
-    created_by: userId ? Number(userId) : null,
-    is_active: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
+  inFlightUploads.add(nameLock);
+  inFlightUploads.add(hashLock);
 
   try {
-    const { data, error: insertError } = await supabase
-      .from('songs')
-      .insert(songRecord)
-      .select('*')
-      .single();
+    // 4. Pre-upload Duplicate Checks (Never touches Storage if duplicate)
+    const dupCheck = await checkDuplicateSong({ filename: file.originalname, hash: fileHash });
+    if (dupCheck.isDuplicate) {
+      const error = new Error(dupCheck.message);
+      error.status = 409;
+      error.conflict = true;
+      error.duplicateType = dupCheck.type;
+      error.existingSong = dupCheck.existingSong;
+      throw error;
+    }
 
-    if (insertError) {
-      if (!isTableMissingError(insertError)) {
+    // 5. Prepare paths and identifiers
+    const songId = crypto.randomUUID();
+    const safeFilename = sanitizeFilename(file.originalname);
+    const storagePath = `library/${songId}/${safeFilename}`;
+    const mimeType = file.mimetype || 'audio/mpeg';
+    const sizeBytes = file.size || file.buffer.length;
+
+    // 6. Extract audio metadata (ID3 tags / duration)
+    const extracted = await extractAudioMetadata(file.buffer, file.originalname, mimeType);
+
+    const finalTitle = (title && title.trim()) || extracted.title || 'Untitled Track';
+    const finalArtist = (artist && artist.trim()) || extracted.artist || null;
+    const finalAlbum = (album && album.trim()) || extracted.album || null;
+    const durationSeconds = extracted.durationSeconds || 0;
+    const duration = extracted.duration || formatDuration(durationSeconds);
+
+    // 7. Upload binary audio to Supabase Storage (private bucket)
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(storagePath, file.buffer, {
+        contentType: mimeType,
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('[SONG_SERVICE] Supabase Storage upload failed:', uploadError.message);
+      throw new Error(`Storage upload failed: ${uploadError.message}`);
+    }
+
+    // 8. Insert metadata into public.songs
+    const songRecord = {
+      id: songId,
+      title: finalTitle,
+      artist: finalArtist,
+      album: finalAlbum,
+      duration_seconds: durationSeconds,
+      duration,
+      mime_type: mimeType,
+      file_size_bytes: sizeBytes,
+      file_hash: fileHash,
+      storage_bucket: BUCKET_NAME,
+      storage_path: storagePath,
+      original_filename: file.originalname.trim(),
+      created_by: userId ? Number(userId) : null,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      const { data, error: insertError } = await supabase
+        .from('songs')
+        .insert(songRecord)
+        .select('*')
+        .single();
+
+      if (insertError) {
+        // If error is schema cache missing file_hash column (PGRST204), retry insert without file_hash
+        if (insertError.code === 'PGRST204' || (insertError.message && insertError.message.includes('file_hash'))) {
+          const { file_hash, ...legacyRecord } = songRecord;
+          const { data: retryData, error: retryErr } = await supabase
+            .from('songs')
+            .insert(legacyRecord)
+            .select('*')
+            .single();
+
+          if (!retryErr) {
+            KNOWN_EXISTING_HASHES.set(songId, fileHash);
+            memorySongs.set(songId, retryData || songRecord);
+            return retryData || songRecord;
+          }
+        }
+
         // Rollback uploaded object immediately to avoid orphaned storage files
-        console.warn(`[SONG_SERVICE] Rolling back orphaned object "${storagePath}" due to DB error: ${insertError.message}`);
+        console.warn(`[SONG_SERVICE] Rolling back uploaded object "${storagePath}" due to DB error: ${insertError.message}`);
         await supabase.storage.from(BUCKET_NAME).remove([storagePath]);
+
+        // Handle PostgreSQL unique-violation error (23505) safely
+        if (insertError.code === '23505' || (insertError.message && insertError.message.toLowerCase().includes('unique'))) {
+          const err = new Error('This song or audio content already exists in your library.');
+          err.status = 409;
+          err.conflict = true;
+          err.duplicateType = 'content';
+          throw err;
+        }
+
+        if (isTableMissingError(insertError)) {
+          KNOWN_EXISTING_HASHES.set(songId, fileHash);
+          memorySongs.set(songId, songRecord);
+          return songRecord;
+        }
+
         throw new Error(`Database record creation failed: ${insertError.message}`);
       }
-      // If table is missing, store in memory fallback
-      memorySongs.set(songId, songRecord);
-      return songRecord;
-    }
 
-    // Also update in-memory cache
-    memorySongs.set(songId, data || songRecord);
-    return data || songRecord;
-  } catch (err) {
-    if (isTableMissingError(err)) {
-      memorySongs.set(songId, songRecord);
-      return songRecord;
+      KNOWN_EXISTING_HASHES.set(songId, fileHash);
+      memorySongs.set(songId, data || songRecord);
+      return data || songRecord;
+    } catch (dbErr) {
+      // Ensure storage object is always cleaned up on DB failure
+      await supabase.storage.from(BUCKET_NAME).remove([storagePath]);
+      throw dbErr;
     }
-    // Clean up uploaded object on error
-    await supabase.storage.from(BUCKET_NAME).remove([storagePath]);
-    throw err;
+  } finally {
+    inFlightUploads.delete(nameLock);
+    inFlightUploads.delete(hashLock);
   }
 }
 
 /**
- * Bulk upload multiple audio files with limited concurrency
+ * Bulk upload multiple audio files with limited concurrency and in-batch duplicate detection
  */
 async function uploadBulkSongs({ files = [], userId = null, concurrency = 3 }) {
   if (!Array.isArray(files) || files.length === 0) {
-    return { total: 0, successful: 0, failed: 0, results: [] };
+    return {
+      total: 0,
+      successful: 0,
+      duplicates: 0,
+      duplicate_filename: 0,
+      duplicate_content: 0,
+      failed: 0,
+      results: []
+    };
   }
 
-  const results = [];
-  const limit = Math.max(1, Math.min(5, concurrency));
+  const results = new Array(files.length);
+  const batchFilenames = new Map(); // normName -> { index, filename }
+  const batchHashes = new Map();    // hash -> { index, filename }
 
-  // Process files using a bounded concurrency queue
-  let currentIndex = 0;
+  // 1. Pre-process batch: validate format and detect duplicates within the same batch
+  const toUpload = [];
 
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const validation = validateAudioFile(file);
+    if (!validation.valid) {
+      results[i] = {
+        filename: file.originalname,
+        success: false,
+        status: 'failed',
+        error: validation.error
+      };
+      continue;
+    }
+
+    const normName = normalizeFilename(file.originalname);
+    const hash = calculateFileHash(file.buffer);
+
+    // Check duplicate filename within the same batch
+    if (batchFilenames.has(normName)) {
+      const prior = batchFilenames.get(normName);
+      results[i] = {
+        filename: file.originalname,
+        success: false,
+        status: 'duplicate_filename',
+        duplicateType: 'filename',
+        message: `Duplicate filename within batch: already included as "${prior.filename}".`,
+        existing_song: {
+          original_filename: prior.filename,
+          title: prior.filename
+        }
+      };
+      continue;
+    }
+
+    // Check duplicate content within the same batch (even with different filename!)
+    if (batchHashes.has(hash)) {
+      const prior = batchHashes.get(hash);
+      results[i] = {
+        filename: file.originalname,
+        success: false,
+        status: 'duplicate_content',
+        duplicateType: 'content',
+        message: `Duplicate audio content within batch: identical audio to "${prior.filename}".`,
+        existing_song: {
+          original_filename: prior.filename,
+          title: prior.filename
+        }
+      };
+      continue;
+    }
+
+    batchFilenames.set(normName, { index: i, filename: file.originalname });
+    batchHashes.set(hash, { index: i, filename: file.originalname });
+
+    toUpload.push({ index: i, file, normName, hash });
+  }
+
+  // 2. Upload candidates with bounded concurrency
+  let currentIdx = 0;
   async function worker() {
-    while (currentIndex < files.length) {
-      const idx = currentIndex++;
-      const file = files[idx];
+    while (currentIdx < toUpload.length) {
+      const task = toUpload[currentIdx++];
       try {
-        const song = await uploadSingleSong({ file, userId });
-        results[idx] = {
-          filename: file.originalname,
+        const song = await uploadSingleSong({
+          file: task.file,
+          userId
+        });
+        results[task.index] = {
+          filename: task.file.originalname,
           success: true,
+          status: 'uploaded',
           song
         };
       } catch (err) {
-        results[idx] = {
-          filename: file.originalname,
-          success: false,
-          error: err.message || 'Upload failed'
-        };
+        if (err.status === 409 || err.conflict) {
+          const status = err.duplicateType === 'content' ? 'duplicate_content' : 'duplicate_filename';
+          results[task.index] = {
+            filename: task.file.originalname,
+            success: false,
+            status,
+            duplicateType: err.duplicateType || 'filename',
+            message: err.message,
+            existing_song: err.existingSong || null
+          };
+        } else {
+          results[task.index] = {
+            filename: task.file.originalname,
+            success: false,
+            status: 'failed',
+            error: err.message || 'Upload failed'
+          };
+        }
       }
     }
   }
 
-  const workers = Array.from({ length: Math.min(limit, files.length) }, () => worker());
+  const workerCount = Math.min(Math.max(1, concurrency), toUpload.length || 1);
+  const workers = Array.from({ length: workerCount }, () => worker());
   await Promise.all(workers);
 
-  const successful = results.filter((r) => r.success).length;
-  const failed = results.filter((r) => !r.success).length;
+  const successful = results.filter((r) => r && r.success).length;
+  const duplicate_filename = results.filter((r) => r && r.status === 'duplicate_filename').length;
+  const duplicate_content = results.filter((r) => r && r.status === 'duplicate_content').length;
+  const failed = results.filter((r) => r && r.status === 'failed').length;
 
   return {
     total: files.length,
     successful,
+    duplicates: duplicate_filename + duplicate_content,
+    duplicate_filename,
+    duplicate_content,
     failed,
     results
   };
@@ -527,13 +807,22 @@ async function getSchedulePlaylist(scheduleId) {
         .order('play_order', { ascending: true });
 
       if (!error && Array.isArray(data)) {
-        return data;
+        return data.map((t) => ({
+          ...t,
+          source: t.source || (t.song_id ? 'supabase' : 'general'),
+          track_id: t.track_id || (t.song_id ? null : (!isNaN(Number(t.id)) ? Number(t.id) : null))
+        }));
       }
     } catch {
       // Fall through to memory
     }
   }
-  return memoryScheduleTracks.get(String(scheduleId)) || [];
+  const cached = memoryScheduleTracks.get(String(scheduleId)) || [];
+  return cached.map((t) => ({
+    ...t,
+    source: t.source || (t.song_id ? 'supabase' : 'general'),
+    track_id: t.track_id || (t.song_id ? null : (!isNaN(Number(t.id)) ? Number(t.id) : null))
+  }));
 }
 
 async function saveSchedulePlaylist(scheduleId, songs) {
@@ -541,16 +830,23 @@ async function saveSchedulePlaylist(scheduleId, songs) {
   const supabase = getSupabase();
 
   const formattedRows = songs.map((s, idx) => {
+    const isSupabase = s.source === 'supabase' || Boolean(s.song_id);
+    const songId = isSupabase ? (s.song_id || (s.id && isNaN(Number(s.id)) ? s.id : null)) : null;
+    const trackId = !isSupabase ? (s.track_id || (!isNaN(Number(s.id)) ? Number(s.id) : null)) : null;
+    const source = isSupabase ? 'supabase' : 'general';
+
     // Never persist temporary signed URLs or internal signed endpoints in stream_url
     let safeStreamUrl = s.stream_url || null;
-    if (safeStreamUrl && (safeStreamUrl.includes('token=') || safeStreamUrl.includes('/signed-url') || s.song_id)) {
+    if (safeStreamUrl && (safeStreamUrl.includes('token=') || safeStreamUrl.includes('/signed-url') || isSupabase)) {
       safeStreamUrl = null;
     }
 
     return {
       id: s.id && s.id.length > 20 ? s.id : crypto.randomUUID(),
       schedule_id: Number(scheduleId),
-      song_id: s.song_id || (s.id && isNaN(Number(s.id)) ? s.id : null),
+      song_id: songId,
+      track_id: trackId,
+      source,
       title: s.title ? s.title.trim() : 'Untitled Track',
       artist: s.artist ? s.artist.trim() : null,
       album: s.album ? s.album.trim() : null,
@@ -566,7 +862,12 @@ async function saveSchedulePlaylist(scheduleId, songs) {
     try {
       await supabase.from('schedule_tracks').delete().eq('schedule_id', scheduleId);
       if (formattedRows.length > 0) {
-        await supabase.from('schedule_tracks').insert(formattedRows);
+        const { error: insertErr } = await supabase.from('schedule_tracks').insert(formattedRows);
+        if (insertErr && (insertErr.code === 'PGRST204' || (insertErr.message && insertErr.message.includes('schema cache')))) {
+          // If source or track_id column is not in schema cache, strip them and insert core columns
+          const legacyRows = formattedRows.map(({ source, track_id, ...rest }) => rest);
+          await supabase.from('schedule_tracks').insert(legacyRows);
+        }
       }
     } catch {
       // Table may not exist yet, cache in memory
@@ -588,6 +889,9 @@ module.exports = {
   deleteSong,
   generateSignedUrl,
   getSchedulePlaylist,
-  saveSchedulePlaylist
+  saveSchedulePlaylist,
+  normalizeFilename,
+  calculateFileHash,
+  checkDuplicateSong
 };
 

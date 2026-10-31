@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.songs (
   duration VARCHAR(20) DEFAULT '00:00',
   mime_type VARCHAR(100) NOT NULL,
   file_size_bytes BIGINT NOT NULL,
+  file_hash VARCHAR(64),
   storage_bucket VARCHAR(100) NOT NULL DEFAULT 'pulsecast-music-library',
   storage_path VARCHAR(500) NOT NULL,
   original_filename VARCHAR(255),
@@ -43,6 +44,8 @@ CREATE INDEX IF NOT EXISTS idx_songs_title ON public.songs (LOWER(title));
 CREATE INDEX IF NOT EXISTS idx_songs_artist ON public.songs (LOWER(artist));
 CREATE INDEX IF NOT EXISTS idx_songs_album ON public.songs (LOWER(album));
 CREATE INDEX IF NOT EXISTS idx_songs_active ON public.songs (is_active);
+CREATE INDEX IF NOT EXISTS idx_songs_file_hash ON public.songs (file_hash) WHERE file_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_songs_normalized_filename ON public.songs (LOWER(TRIM(original_filename)));
 CREATE INDEX IF NOT EXISTS idx_songs_created_at ON public.songs (created_at DESC);
 
 -- Trigger function for auto-updating updated_at
@@ -69,6 +72,8 @@ CREATE TABLE IF NOT EXISTS public.schedule_tracks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   schedule_id BIGINT NOT NULL REFERENCES public.program_schedules(id) ON DELETE CASCADE,
   song_id UUID REFERENCES public.songs(id) ON DELETE SET NULL,
+  track_id BIGINT,
+  source VARCHAR(50) DEFAULT 'general',
   title VARCHAR(200) NOT NULL,
   artist VARCHAR(200),
   album VARCHAR(200),
@@ -79,9 +84,16 @@ CREATE TABLE IF NOT EXISTS public.schedule_tracks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Add columns if table already existed prior to migration
+ALTER TABLE public.schedule_tracks
+  ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'general',
+  ADD COLUMN IF NOT EXISTS track_id BIGINT;
+
 -- Ordering and lookup indexes
 CREATE INDEX IF NOT EXISTS idx_schedule_tracks_schedule ON public.schedule_tracks (schedule_id, play_order);
 CREATE INDEX IF NOT EXISTS idx_schedule_tracks_song ON public.schedule_tracks (song_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_tracks_source ON public.schedule_tracks (source);
+CREATE INDEX IF NOT EXISTS idx_schedule_tracks_track_id ON public.schedule_tracks (track_id);
 
 -- ----------------------------------------------------------------------------
 -- 3. Row Level Security (RLS) Configuration

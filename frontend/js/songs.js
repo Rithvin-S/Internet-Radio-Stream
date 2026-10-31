@@ -543,6 +543,9 @@
     const fileNameEl = document.getElementById('selectedFileName');
     const fileSizeEl = document.getElementById('selectedFileSize');
     const clearFileBtn = document.getElementById('clearSingleSelectedFile');
+    const dupAlert = document.getElementById('singleUploadDuplicateAlert');
+    const dupTitle = document.getElementById('singleDupTitle');
+    const dupMsg = document.getElementById('singleDupMsg');
 
     const progressBox = document.getElementById('singleUploadProgressContainer');
     const progressBar = document.getElementById('singleProgressBar');
@@ -553,6 +556,7 @@
       if (fileInput) fileInput.value = '';
       if (form) form.reset();
       if (fileInfoBox) fileInfoBox.style.display = 'none';
+      if (dupAlert) dupAlert.style.display = 'none';
       if (progressBox) progressBox.style.display = 'none';
       if (progressBar) progressBar.style.width = '0%';
       if (startBtn) {
@@ -608,6 +612,17 @@
       if (fileSizeEl) fileSizeEl.textContent = formatBytes(file.size);
       if (fileInfoBox) fileInfoBox.style.display = 'block';
 
+      // Duplicate pre-detection against loaded catalogue
+      const normInput = file.name.trim().toLowerCase();
+      const existing = songsList.find((s) => s.original_filename && s.original_filename.trim().toLowerCase() === normInput);
+      if (existing) {
+        if (dupTitle) dupTitle.textContent = 'Duplicate detected – this filename is already in your library.';
+        if (dupMsg) dupMsg.textContent = `Existing song: "${existing.title}" by ${existing.artist || 'Unknown Artist'} (uploaded on ${formatUploadDate(existing.created_at)}).`;
+        if (dupAlert) dupAlert.style.display = 'block';
+      } else {
+        if (dupAlert) dupAlert.style.display = 'none';
+      }
+
       // Pre-fill Title from filename if empty
       const titleInput = document.getElementById('uploadSongTitle');
       if (titleInput && !titleInput.value) {
@@ -653,7 +668,19 @@
         resetModal();
         loadSongs(1);
       } catch (err) {
-        alert(`Upload failed: ${err.message}`);
+        if (err.status === 409 || err.conflict) {
+          if (dupTitle) dupTitle.textContent = 'Duplicate Song Detected';
+          let detail = err.message || 'This song already exists in your library.';
+          if (err.existing_song) {
+            detail += `\nExisting: "${err.existing_song.title}" (${err.existing_song.original_filename}).`;
+          }
+          if (dupMsg) dupMsg.textContent = detail;
+          if (dupAlert) dupAlert.style.display = 'block';
+          showToast(`Duplicate: ${err.message}`, 'error');
+        } else {
+          alert(`Upload failed: ${err.message}`);
+        }
+
         if (startBtn) {
           startBtn.disabled = false;
           startBtn.textContent = 'Upload to Library';
@@ -724,10 +751,15 @@
     function addFilesToBulkQueue(files) {
       files.forEach((file) => {
         if (bulkQueue.length < 20) {
+          const normInput = file.name.trim().toLowerCase();
+          const inLibrary = songsList.some((s) => s.original_filename && s.original_filename.trim().toLowerCase() === normInput);
+          const inQueue = bulkQueue.some((b) => b.file.name.trim().toLowerCase() === normInput);
+
           bulkQueue.push({
             id: 'bq_' + Math.random().toString(36).substring(2, 9),
             file,
             status: 'pending',
+            warning: inLibrary ? 'Filename already in library' : (inQueue ? 'Duplicate filename in batch' : null),
             error: null
           });
         }
@@ -748,13 +780,20 @@
       queueContainer.innerHTML = bulkQueue
         .map((item) => {
           let badgeColor = 'var(--text-muted)';
-          let badgeText = 'Pending';
+          let badgeText = item.warning ? `⚠️ ${item.warning}` : 'Pending';
+
           if (item.status === 'uploading') {
             badgeColor = 'var(--primary)';
             badgeText = 'Uploading...';
           } else if (item.status === 'success') {
             badgeColor = '#059669';
             badgeText = '✓ Uploaded';
+          } else if (item.status === 'duplicate_filename') {
+            badgeColor = '#D97706';
+            badgeText = `⚠️ Duplicate Filename: ${escapeHtml(item.error || 'Already in library')}`;
+          } else if (item.status === 'duplicate_content') {
+            badgeColor = '#D97706';
+            badgeText = `⚠️ Duplicate Audio: ${escapeHtml(item.error || 'Identical content')}`;
           } else if (item.status === 'error') {
             badgeColor = '#DC2626';
             badgeText = `✕ ${escapeHtml(item.error || 'Failed')}`;
@@ -768,7 +807,7 @@
                 <div class="upload-queue-meta">
                   <span>${formatBytes(item.file.size)}</span>
                   <span>•</span>
-                  <span style="font-weight: 700; color: ${badgeColor};">${badgeText}</span>
+                  <span style="font-weight: 700; color: ${badgeColor}; font-size: 0.78rem;">${badgeText}</span>
                 </div>
               </div>
             </div>
@@ -801,32 +840,40 @@
           const res = results[idx];
           if (res && res.success) {
             item.status = 'success';
+          } else if (res && (res.status === 'duplicate_filename' || res.duplicateType === 'filename')) {
+            item.status = 'duplicate_filename';
+            item.error = res.message || 'Duplicate filename';
+          } else if (res && (res.status === 'duplicate_content' || res.duplicateType === 'content')) {
+            item.status = 'duplicate_content';
+            item.error = res.message || 'Duplicate audio content';
           } else {
             item.status = 'error';
-            item.error = res ? res.error : 'Failed to upload';
+            item.error = res ? (res.error || res.message) : 'Failed to upload';
           }
         });
 
         renderBulkQueue();
 
         const successful = resp.successful || 0;
+        const duplicates = (resp.duplicates !== undefined) ? resp.duplicates : ((resp.duplicate_filename || 0) + (resp.duplicate_content || 0));
         const failed = resp.failed || 0;
 
         if (summaryBanner) {
           summaryBanner.style.display = 'block';
-          if (failed === 0) {
+          if (failed === 0 && duplicates === 0) {
             summaryBanner.style.background = 'rgba(16, 185, 129, 0.12)';
             summaryBanner.style.color = '#047857';
             summaryBanner.textContent = `All ${successful} songs uploaded successfully to library.`;
           } else {
-            summaryBanner.style.background = 'rgba(239, 68, 68, 0.12)';
-            summaryBanner.style.color = '#b91c1c';
-            summaryBanner.textContent = `${successful} uploaded, ${failed} failed. Click "Retry Failed" to try again.`;
-            if (retryBtn) retryBtn.style.display = 'inline-block';
+            const isWarning = failed === 0 && duplicates > 0;
+            summaryBanner.style.background = isWarning ? 'rgba(245, 158, 11, 0.12)' : 'rgba(239, 68, 68, 0.12)';
+            summaryBanner.style.color = isWarning ? '#B45309' : '#b91c1c';
+            summaryBanner.textContent = `${successful} uploaded, ${duplicates} duplicate(s) prevented, ${failed} failed.${failed > 0 ? ' Click "Retry Failed" to try again.' : ''}`;
+            if (retryBtn) retryBtn.style.display = failed > 0 ? 'inline-block' : 'none';
           }
         }
 
-        showToast(`Bulk upload complete: ${successful} succeeded, ${failed} failed`, failed === 0 ? 'success' : 'error');
+        showToast(`Bulk upload complete: ${successful} uploaded, ${duplicates} duplicate(s), ${failed} failed`, failed === 0 ? 'success' : 'error');
         loadSongs(1);
       } catch (err) {
         alert(`Bulk upload encountered error: ${err.message}`);

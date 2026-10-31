@@ -236,20 +236,62 @@
               <label for="schedPublishedInput" style="cursor: pointer; margin: 0; font-size: 0.85rem;">Published (Visible in station program guide & public player)</label>
             </div>
 
-            <!-- Song Assignment & Playlist Manager -->
+            <!-- Song Assignment & Playlist Manager (Two Separate Libraries: General & Supabase) -->
             <div class="song-manager-box">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                <label style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0;">Broadcast Playlist & Song Assignment</label>
-                <a href="/admin/songs.html" target="_blank" style="font-size: 0.75rem; color: var(--primary); text-decoration: none; font-weight: 600;">Open Song Library ↗</a>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                <label style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary); margin-bottom: 0;">Broadcast Playlist & Song Assignment</label>
+                <a href="/admin/songs.html" target="_blank" style="font-size: 0.76rem; color: var(--primary); text-decoration: none; font-weight: 600;">Manage Song Library ↗</a>
               </div>
-              <div class="song-search-bar">
-                <input type="text" id="songSearchInput" class="form-input" placeholder="Search track library by title or artist..." autocomplete="off">
-                <button type="button" class="btn-secondary" id="addCustomTrackBtn" style="white-space: nowrap; font-size: 0.8rem;">+ Custom</button>
-                <div id="songSearchResults" class="song-search-results" style="display: none;"></div>
+
+              <!-- Library Source Tabs -->
+              <div class="library-tabs-nav" role="tablist" aria-label="Music Library Sources">
+                <button type="button" class="library-tab-btn active" id="tabGeneralLibrary" data-tab="general" role="tab" aria-selected="true" aria-controls="panelGeneralLibrary">
+                  <span>📻</span> General Library
+                </button>
+                <button type="button" class="library-tab-btn" id="tabSupabaseLibrary" data-tab="supabase" role="tab" aria-selected="false" aria-controls="panelSupabaseLibrary">
+                  <span>☁️</span> Supabase Library
+                </button>
+              </div>
+
+              <!-- Tab Panel 1: General Library -->
+              <div id="panelGeneralLibrary" class="library-tab-panel active" role="tabpanel">
+                <div class="song-search-bar">
+                  <input type="text" id="generalSongSearchInput" class="form-input" placeholder="Search General Catalogue by title, artist, or album..." autocomplete="off">
+                  <button type="button" class="btn-secondary" id="addCustomTrackBtn" style="white-space: nowrap; font-size: 0.8rem;">+ Custom</button>
+                </div>
+                <div id="generalSongSearchResults" class="library-track-results">
+                  <!-- Tracks populated dynamically via calendar.js -->
+                </div>
+              </div>
+
+              <!-- Tab Panel 2: Supabase Library -->
+              <div id="panelSupabaseLibrary" class="library-tab-panel" role="tabpanel" style="display: none;">
+                <div class="song-search-bar">
+                  <input type="text" id="supabaseSongSearchInput" class="form-input" placeholder="Search Supabase Storage library by title, artist, or album..." autocomplete="off">
+                </div>
+                <div id="supabaseSongSearchResults" class="library-track-results">
+                  <!-- Tracks populated dynamically via calendar.js -->
+                </div>
+              </div>
+
+              <!-- In-Modal Audio Preview Bar (for listening before adding) -->
+              <div id="scheduleModalPreviewBar" class="schedule-modal-preview-bar" style="display: none;">
+                <div class="preview-mini-info">
+                  <span class="preview-play-pulse">♫</span>
+                  <span id="schedPreviewTrackName" style="font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Previewing Track</span>
+                </div>
+                <audio id="schedModalAudio" controls controlsList="nodownload" style="height: 32px; flex: 1; max-width: 280px;"></audio>
+                <button type="button" id="closeSchedModalPreview" style="background: none; border: none; font-size: 0.95rem; cursor: pointer; color: var(--text-muted); padding: 0.2rem 0.4rem;" title="Close preview">✕</button>
+              </div>
+
+              <!-- Selected Playlist Section (Displayed separately below the library tabs) -->
+              <div style="margin-top: 0.75rem; margin-bottom: 0.25rem; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Assigned Program Playlist</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Use ▲ / ▼ to reorder tracks</span>
               </div>
 
               <div id="selectedSongsContainer" class="selected-songs-list">
-                <!-- Populated dynamically by calendar.js -->
+                <!-- Populated dynamically by calendar.js with Title, Artist, Source badge, Duration, Reorder & Remove -->
               </div>
 
               <div class="playlist-summary-bar">

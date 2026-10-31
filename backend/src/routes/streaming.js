@@ -3,6 +3,7 @@
  * Radio Playback & Liquidsoap Streaming Bridge (src/routes/streaming.js)
  *
  * Implements the private-file-to-Liquidsoap playback bridge:
+ * - Station-aware real-time schedule resolution
  * - Dynamically resolves upcoming scheduled tracks
  * - Creates short-lived signed URLs immediately prior to playback
  * - Handles expired URLs safely
@@ -12,26 +13,77 @@
 const express = require('express');
 const router = express.Router();
 const songService = require('../services/songService');
+const streamingService = require('../services/streamingService');
 const { getSupabase } = require('../config/supabase');
 const { authenticateUser, requireAdmin } = require('../middleware/auth');
 
 /**
  * Authorization Guard for Radio Playback & Signed URL streaming
- * Only authorized EC2 radio daemon (via x-radio-token) or administrators can request signed URLs
+ * Only authorized EC2 radio daemon (via x-radio-token) or administrators can request streaming tracks.
+ * Rejects the default hardcoded token in production mode.
  */
 function requireStreamingAuth(req, res, next) {
   const radioToken = req.headers['x-radio-token'] || req.query.radio_token;
-  const expectedSecret = process.env.RADIO_STREAMING_KEY || process.env.STREAMING_SECRET || 'pulsecast_streaming_secure_token_key';
+  const configuredKey = process.env.RADIO_STREAMING_KEY || process.env.STREAMING_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
 
-  if (radioToken && radioToken === expectedSecret) {
-    return next();
+  // 1. Enforce production security check: reject default token
+  if (isProduction) {
+    if (!configuredKey || configuredKey === 'pulsecast_streaming_secure_token_key') {
+      console.error('[STREAMING AUTH] CRITICAL: RADIO_STREAMING_KEY must be configured in production.');
+      return res.status(500).json({
+        success: false,
+        message: 'Streaming authorization key configuration error.'
+      });
+    }
   }
 
+  const expectedSecret = configuredKey || 'pulsecast_streaming_secure_token_key';
+
+  // 2. Radio Token Authentication
+  if (radioToken) {
+    if (radioToken === expectedSecret) {
+      return next();
+    }
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid radio streaming token.'
+    });
+  }
+
+  // 3. Fallback to Admin JWT (for Admin dashboard tests and control)
   return authenticateUser(req, res, (err) => {
-    if (err) return next(err);
+    if (err) {
+      return res.status(401).json({
+        success: false,
+        message: 'Missing or invalid streaming authorization credentials.'
+      });
+    }
     return requireAdmin(req, res, next);
   });
 }
+
+/**
+ * GET /api/streaming/stations/:stationId/next-track
+ * Station-Aware Playback Dispatcher:
+ * - Identifies currently active published schedule for requested station
+ * - Evaluates start/end times in Asia/Kolkata timezone
+ * - Returns next track in playlist (Supabase signed URL or General audio URL)
+ * - Protected: Requires x-radio-token or admin JWT
+ */
+router.get('/stations/:stationId/next-track', requireStreamingAuth, async (req, res) => {
+  try {
+    const { stationId } = req.params;
+    const result = await streamingService.resolveStationNextTrack(stationId, req.query);
+    return res.status(200).json(result);
+  } catch (err) {
+    const status = err.statusCode || 500;
+    return res.status(status).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
 
 /**
  * GET /api/streaming/schedule/:scheduleId/next-track
@@ -41,7 +93,30 @@ function requireStreamingAuth(req, res, next) {
 router.get('/schedule/:scheduleId/next-track', requireStreamingAuth, async (req, res) => {
   try {
     const { scheduleId } = req.params;
-    const playlist = await songService.getSchedulePlaylist(scheduleId);
+    let playlist = await songService.getSchedulePlaylist(scheduleId);
+
+    if (!playlist || playlist.length === 0) {
+      // Fallback: check program_schedules JSON metadata
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          const { data: sched } = await supabase
+            .from('program_schedules')
+            .select('description')
+            .eq('id', scheduleId)
+            .maybeSingle();
+
+          if (sched && sched.description && sched.description.startsWith('{')) {
+            const parsed = JSON.parse(sched.description);
+            if (Array.isArray(parsed.songs) && parsed.songs.length > 0) {
+              playlist = parsed.songs;
+            }
+          }
+        } catch (err) {
+          console.warn('[STREAMING] Fallback metadata check error:', err.message);
+        }
+      }
+    }
 
     if (!playlist || playlist.length === 0) {
       return res.status(404).json({
@@ -54,16 +129,31 @@ router.get('/schedule/:scheduleId/next-track', requireStreamingAuth, async (req,
     const index = parseInt(req.query.index, 10) || 0;
     const track = playlist[index % playlist.length];
 
-    let audioUrl = track.stream_url;
+    const isSupabase = track.source === 'supabase' || Boolean(track.song_id);
+    let audioUrl = track.stream_url || null;
     let signedExpiresIn = 300; // 5 minutes
 
-    // If linked to a library song, generate immediate signed URL
-    if (track.song_id) {
+    // Source-based audio resolution
+    if (isSupabase && track.song_id) {
       try {
         const signed = await songService.generateSignedUrl(track.song_id, signedExpiresIn);
         audioUrl = signed.signedUrl;
       } catch (err) {
-        console.warn(`[STREAMING] Signed URL generation failed for song ${track.song_id}: ${err.message}`);
+        console.warn(`[STREAMING] Signed URL generation failed for Supabase song ${track.song_id}: ${err.message}`);
+      }
+    } else if (!isSupabase) {
+      // General Library track: resolve stream_url from track or upcoming_tracks table
+      if (!audioUrl && (track.track_id || track.id)) {
+        const supabase = getSupabase();
+        if (supabase) {
+          const tId = track.track_id || (!isNaN(Number(track.id)) ? Number(track.id) : null);
+          if (tId) {
+            const { data } = await supabase.from('upcoming_tracks').select('stream_url').eq('id', tId).maybeSingle();
+            if (data && data.stream_url) {
+              audioUrl = data.stream_url;
+            }
+          }
+        }
       }
     }
 
@@ -77,8 +167,9 @@ router.get('/schedule/:scheduleId/next-track', requireStreamingAuth, async (req,
       duration: track.duration || '03:45',
       duration_seconds: track.duration_seconds || 225,
       audio_url: audioUrl,
-      is_signed_url: Boolean(track.song_id),
-      expires_in: signedExpiresIn,
+      source: isSupabase ? 'supabase' : 'general',
+      is_signed_url: isSupabase,
+      expires_in: isSupabase ? signedExpiresIn : null,
       created_at: new Date().toISOString()
     });
   } catch (err) {
@@ -137,4 +228,3 @@ router.get('/stations/:stationId/current-broadcast', async (req, res) => {
 });
 
 module.exports = router;
-

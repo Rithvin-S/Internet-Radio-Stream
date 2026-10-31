@@ -100,6 +100,15 @@ async function uploadSong(req, res, next) {
       data: song
     });
   } catch (err) {
+    if (err.status === 409 || err.conflict) {
+      return res.status(409).json({
+        success: false,
+        conflict: true,
+        duplicateType: err.duplicateType || 'filename',
+        message: err.message,
+        existing_song: err.existingSong || null
+      });
+    }
     if (err.message && (err.message.includes('exceeds maximum') || err.message.includes('Invalid file extension') || err.message.includes('Invalid MIME type'))) {
       return res.status(400).json({ success: false, message: err.message });
     }
@@ -109,7 +118,7 @@ async function uploadSong(req, res, next) {
 
 /**
  * POST /api/admin/songs/bulk
- * Bulk upload multiple audio files with bounded concurrency
+ * Bulk upload multiple audio files with bounded concurrency and duplicate detection
  */
 async function uploadBulk(req, res, next) {
   try {
@@ -133,6 +142,9 @@ async function uploadBulk(req, res, next) {
       success: true,
       total: result.total,
       successful: result.successful,
+      duplicates: result.duplicates || 0,
+      duplicate_filename: result.duplicate_filename || 0,
+      duplicate_content: result.duplicate_content || 0,
       failed: result.failed,
       data: result.results
     });

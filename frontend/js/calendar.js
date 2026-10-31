@@ -873,16 +873,26 @@
       } else {
         songsContainer.innerHTML = songs
           .map(
-            (s, idx) => `
-            <div class="selected-song-item" style="padding:0.45rem 0.65rem;">
-              <span class="song-order-num">#${idx + 1}</span>
-              <div class="song-info">
-                <div class="song-title-text">${escapeHtml(s.title)}</div>
-                <div class="song-artist-text">${escapeHtml(s.artist || 'Unknown Artist')}</div>
+            (s, idx) => {
+              const isSupabase = s.source === 'supabase' || Boolean(s.song_id);
+              const sourceBadge = isSupabase
+                ? '<span class="badge-source badge-source-supabase" style="margin-left:0.4rem;">☁️ Supabase</span>'
+                : '<span class="badge-source badge-source-general" style="margin-left:0.4rem;">📻 General</span>';
+
+              return `
+              <div class="selected-song-item" style="padding:0.45rem 0.65rem;">
+                <span class="song-order-num">#${idx + 1}</span>
+                <div class="song-info">
+                  <div style="display:flex; align-items:center; gap:0.35rem;">
+                    <div class="song-title-text">${escapeHtml(s.title)}</div>
+                    ${sourceBadge}
+                  </div>
+                  <div class="song-artist-text">${escapeHtml(s.artist || 'Unknown Artist')}</div>
+                </div>
+                <span class="song-duration-pill">${escapeHtml(s.duration || '03:45')}</span>
               </div>
-              <span class="song-duration-pill">${escapeHtml(s.duration || '03:45')}</span>
-            </div>
-          `
+            `;
+            }
           )
           .join('');
       }
@@ -975,6 +985,7 @@
     formSongs = [];
     renderFormSongs();
     hideConflictAlert();
+    window.refreshScheduleModalLibraries?.();
 
     modal.style.display = 'flex';
   }
@@ -1005,6 +1016,7 @@
       formSongs = Array.isArray(sched.songs) ? [...sched.songs] : [];
       renderFormSongs();
       hideConflictAlert();
+      window.refreshScheduleModalLibraries?.();
 
       modal.style.display = 'flex';
     } catch (err) {
@@ -1012,10 +1024,21 @@
     }
   }
 
+  function stopModalPreview() {
+    const audio = document.getElementById('schedModalAudio');
+    const bar = document.getElementById('scheduleModalPreviewBar');
+    if (audio) {
+      audio.pause();
+      audio.src = '';
+    }
+    if (bar) bar.style.display = 'none';
+  }
+
   function closeModals() {
     document.querySelectorAll('.modal-overlay').forEach((m) => {
       m.style.display = 'none';
     });
+    stopModalPreview();
   }
 
   function showConflictAlert(msg) {
@@ -1035,6 +1058,8 @@
   // --------------------------------------------------------------------------
   // Interactive Song Manager & Picker
   // --------------------------------------------------------------------------
+  // Broadcast Playlist Rendering (Supports General & Supabase Libraries)
+  // --------------------------------------------------------------------------
   function renderFormSongs() {
     const container = document.getElementById('selectedSongsContainer');
     const summaryCount = document.getElementById('totalSongsCount');
@@ -1042,7 +1067,7 @@
     if (!container) return;
 
     if (formSongs.length === 0) {
-      container.innerHTML = '<div style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:1rem;">No tracks assigned. Search tracks above or add custom items.</div>';
+      container.innerHTML = '<div style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:1.25rem;">No tracks assigned to playlist yet. Select tracks from General or Supabase Library above.</div>';
       if (summaryCount) summaryCount.textContent = '0 songs';
       if (summaryDuration) summaryDuration.textContent = '0m';
       return;
@@ -1053,19 +1078,26 @@
       .map((s, idx) => {
         const sec = s.duration_seconds || timeToMinutes(s.duration || '03:45') * 60;
         totalSec += sec;
+        const isSupabase = s.source === 'supabase' || Boolean(s.song_id);
+        const sourceBadge = isSupabase
+          ? '<span class="badge-source badge-source-supabase">☁️ Supabase</span>'
+          : '<span class="badge-source badge-source-general">📻 General</span>';
 
         return `
-        <div class="selected-song-item">
+        <div class="selected-song-item" data-idx="${idx}">
           <span class="song-order-num">#${idx + 1}</span>
           <div class="song-info">
-            <div class="song-title-text">${escapeHtml(s.title)}</div>
-            <div class="song-artist-text">${escapeHtml(s.artist || 'Unknown Artist')}</div>
+            <div style="display:flex; align-items:center; gap:0.4rem;">
+              <div class="song-title-text" title="${escapeHtml(s.title)}">${escapeHtml(s.title)}</div>
+              ${sourceBadge}
+            </div>
+            <div class="song-artist-text">${escapeHtml(s.artist || 'Unknown Artist')}${s.album ? ` • <em>${escapeHtml(s.album)}</em>` : ''}</div>
           </div>
           <span class="song-duration-pill">${escapeHtml(s.duration || '03:45')}</span>
           <div class="song-actions">
-            ${idx > 0 ? `<button type="button" class="btn-icon song-move-up" data-idx="${idx}" title="Move Up">▲</button>` : ''}
-            ${idx < formSongs.length - 1 ? `<button type="button" class="btn-icon song-move-down" data-idx="${idx}" title="Move Down">▼</button>` : ''}
-            <button type="button" class="btn-icon delete song-remove-btn" data-idx="${idx}" title="Remove">✕</button>
+            ${idx > 0 ? `<button type="button" class="btn-icon song-move-up" data-idx="${idx}" title="Move Up in Play Order">▲</button>` : ''}
+            ${idx < formSongs.length - 1 ? `<button type="button" class="btn-icon song-move-down" data-idx="${idx}" title="Move Down in Play Order">▼</button>` : ''}
+            <button type="button" class="btn-icon delete song-remove-btn" data-idx="${idx}" title="Remove from Playlist (Preserves Library File)">✕</button>
           </div>
         </div>
       `;
@@ -1075,9 +1107,10 @@
     if (summaryCount) summaryCount.textContent = `${formSongs.length} track${formSongs.length > 1 ? 's' : ''}`;
     if (summaryDuration) summaryDuration.textContent = formatMinutesToHours(Math.round(totalSec / 60));
 
-    // Order Handlers
+    // Reorder Handlers (▲ Move Up)
     container.querySelectorAll('.song-move-up').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const idx = parseInt(btn.getAttribute('data-idx'), 10);
         if (idx > 0) {
           const temp = formSongs[idx];
@@ -1088,8 +1121,10 @@
       });
     });
 
+    // Reorder Handlers (▼ Move Down)
     container.querySelectorAll('.song-move-down').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const idx = parseInt(btn.getAttribute('data-idx'), 10);
         if (idx < formSongs.length - 1) {
           const temp = formSongs[idx];
@@ -1100,77 +1135,259 @@
       });
     });
 
+    // Remove from Playlist Handler (Never touches library records or audio files)
     container.querySelectorAll('.song-remove-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const idx = parseInt(btn.getAttribute('data-idx'), 10);
-        formSongs.splice(idx, 1);
+        const removed = formSongs.splice(idx, 1);
         renderFormSongs();
+        if (removed && removed[0]) {
+          showToast(`Removed "${removed[0].title}" from playlist`, 'info');
+        }
       });
     });
   }
 
-  // Live Track Search
-  let searchDebounce = null;
+  // --------------------------------------------------------------------------
+  // Two-Source Music Library Manager (General Library & Supabase Library)
+  // --------------------------------------------------------------------------
+  let generalSearchDebounce = null;
+  let supabaseSearchDebounce = null;
+  let currentActiveTab = 'general';
+
   function setupSongSearch() {
-    const input = document.getElementById('songSearchInput');
-    const resultsBox = document.getElementById('songSearchResults');
-    if (!input || !resultsBox) return;
+    // 1. Tab Switching
+    const tabGeneral = document.getElementById('tabGeneralLibrary');
+    const tabSupabase = document.getElementById('tabSupabaseLibrary');
+    const panelGeneral = document.getElementById('panelGeneralLibrary');
+    const panelSupabase = document.getElementById('panelSupabaseLibrary');
 
-    input.addEventListener('input', () => {
-      clearTimeout(searchDebounce);
-      const query = input.value.trim();
-      if (query.length < 1) {
-        resultsBox.style.display = 'none';
-        return;
+    function switchLibraryTab(target) {
+      currentActiveTab = target;
+      if (target === 'general') {
+        tabGeneral?.classList.add('active');
+        tabGeneral?.setAttribute('aria-selected', 'true');
+        tabSupabase?.classList.remove('active');
+        tabSupabase?.setAttribute('aria-selected', 'false');
+
+        if (panelGeneral) panelGeneral.style.display = 'flex';
+        if (panelSupabase) panelSupabase.style.display = 'none';
+        loadGeneralTracks();
+      } else {
+        tabSupabase?.classList.add('active');
+        tabSupabase?.setAttribute('aria-selected', 'true');
+        tabGeneral?.classList.remove('active');
+        tabGeneral?.setAttribute('aria-selected', 'false');
+
+        if (panelSupabase) panelSupabase.style.display = 'flex';
+        if (panelGeneral) panelGeneral.style.display = 'none';
+        loadSupabaseTracks();
       }
+    }
 
-      searchDebounce = setTimeout(async () => {
-        try {
-          const resp = await apiClient.get(`/admin/songs/search?q=${encodeURIComponent(query)}`);
-          const songs = resp && resp.data ? resp.data : [];
+    tabGeneral?.addEventListener('click', () => switchLibraryTab('general'));
+    tabSupabase?.addEventListener('click', () => switchLibraryTab('supabase'));
 
-          if (songs.length === 0) {
-            resultsBox.innerHTML = '<div style="padding:0.75rem; font-size:0.8rem; color:var(--text-muted);">No songs found in catalogue.</div>';
-          } else {
-            resultsBox.innerHTML = songs
-              .map(
-                (s) => `
-                <div class="song-result-item" data-song='${JSON.stringify(s).replace(/'/g, "&apos;")}'>
-                  <div>
-                    <strong style="font-size:0.85rem;">${escapeHtml(s.title)}</strong>
-                    <div style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml(s.artist || 'Unknown')}</div>
-                  </div>
-                  <span class="tag" style="font-size:0.7rem;">+ Add</span>
-                </div>
-              `
-              )
-              .join('');
+    // 2. General Library Search & Browse
+    const generalInput = document.getElementById('generalSongSearchInput');
+    const generalResults = document.getElementById('generalSongSearchResults');
 
-            resultsBox.querySelectorAll('.song-result-item').forEach((item) => {
-              item.addEventListener('click', () => {
-                const song = JSON.parse(item.getAttribute('data-song').replace(/&apos;/g, "'"));
-                formSongs.push(song);
-                renderFormSongs();
-                resultsBox.style.display = 'none';
-                input.value = '';
-              });
-            });
-          }
+    async function loadGeneralTracks(query = '') {
+      if (!generalResults) return;
+      generalResults.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--text-muted); font-size:0.85rem;"><span class="spin-icon">↻</span> Loading General Library...</div>';
 
-          resultsBox.style.display = 'block';
-        } catch (err) {
-          console.error('Song search failed:', err);
+      try {
+        const qParam = query ? `&q=${encodeURIComponent(query)}` : '';
+        const resp = await apiClient.get(`/admin/songs/search?source=general${qParam}`);
+        const tracks = resp && resp.data ? resp.data : [];
+
+        if (tracks.length === 0) {
+          generalResults.innerHTML = `<div style="padding:1rem; text-align:center; color:var(--text-muted); font-size:0.85rem;">No tracks found in General Catalogue${query ? ` for "${escapeHtml(query)}"` : ''}. Use "+ Custom" to add your own.</div>`;
+          return;
         }
+
+        generalResults.innerHTML = tracks
+          .map(
+            (t) => `
+            <div class="library-track-row" data-track='${JSON.stringify(t).replace(/'/g, "&apos;")}'>
+              <div class="track-row-left">
+                <span style="font-size:1.1rem; opacity:0.8;">📻</span>
+                <div class="track-row-info">
+                  <div class="track-row-title">${escapeHtml(t.title)}</div>
+                  <div class="track-row-meta">
+                    <span>${escapeHtml(t.artist || 'Unknown Artist')}</span>
+                    ${t.album ? `<span>•</span><span>${escapeHtml(t.album)}</span>` : ''}
+                  </div>
+                </div>
+              </div>
+              <div class="track-row-right">
+                <span class="song-duration-pill">${escapeHtml(t.duration || '03:45')}</span>
+                <button type="button" class="btn-secondary btn-add-general-track" style="padding:0.3rem 0.65rem; font-size:0.78rem;">
+                  + Add
+                </button>
+              </div>
+            </div>
+          `
+          )
+          .join('');
+
+        generalResults.querySelectorAll('.btn-add-general-track').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const row = btn.closest('.library-track-row');
+            const track = JSON.parse(row.getAttribute('data-track').replace(/&apos;/g, "'"));
+            formSongs.push({
+              id: track.id,
+              track_id: track.track_id || track.id,
+              song_id: null,
+              source: 'general',
+              title: track.title,
+              artist: track.artist,
+              album: track.album,
+              duration: track.duration,
+              duration_seconds: track.duration_seconds,
+              stream_url: track.stream_url
+            });
+            renderFormSongs();
+            showToast(`Added "${track.title}" to playlist (General)`, 'success');
+          });
+        });
+      } catch (err) {
+        console.error('Failed to load General Library:', err);
+        generalResults.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--danger); font-size:0.85rem;">Failed to load General Catalogue.</div>';
+      }
+    }
+
+    generalInput?.addEventListener('input', () => {
+      clearTimeout(generalSearchDebounce);
+      generalSearchDebounce = setTimeout(() => {
+        loadGeneralTracks(generalInput.value.trim());
       }, 250);
     });
 
-    document.addEventListener('click', (e) => {
-      if (!input.contains(e.target) && !resultsBox.contains(e.target)) {
-        resultsBox.style.display = 'none';
+    // 3. Supabase Library Search & Browse
+    const supabaseInput = document.getElementById('supabaseSongSearchInput');
+    const supabaseResults = document.getElementById('supabaseSongSearchResults');
+
+    async function loadSupabaseTracks(query = '') {
+      if (!supabaseResults) return;
+      supabaseResults.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--text-muted); font-size:0.85rem;"><span class="spin-icon">↻</span> Loading Supabase Storage Library...</div>';
+
+      try {
+        const qParam = query ? `&q=${encodeURIComponent(query)}` : '';
+        const resp = await apiClient.get(`/admin/songs/search?source=supabase${qParam}`);
+        const songs = resp && resp.data ? resp.data : [];
+
+        if (songs.length === 0) {
+          supabaseResults.innerHTML = `<div style="padding:1.25rem; text-align:center; color:var(--text-muted); font-size:0.85rem;">
+            No songs found in Supabase Storage${query ? ` matching "${escapeHtml(query)}"` : ''}.
+            <div style="margin-top:0.35rem;"><a href="/admin/songs.html" target="_blank" style="color:var(--primary); font-weight:600;">Upload audio files in Song Library ↗</a></div>
+          </div>`;
+          return;
+        }
+
+        supabaseResults.innerHTML = songs
+          .map(
+            (s) => `
+            <div class="library-track-row" data-song='${JSON.stringify(s).replace(/'/g, "&apos;")}'>
+              <div class="track-row-left">
+                <span style="font-size:1.1rem; opacity:0.8;">☁️</span>
+                <div class="track-row-info">
+                  <div class="track-row-title">${escapeHtml(s.title)}</div>
+                  <div class="track-row-meta">
+                    <span>${escapeHtml(s.artist || 'Unknown Artist')}</span>
+                    ${s.album ? `<span>•</span><span>${escapeHtml(s.album)}</span>` : ''}
+                  </div>
+                </div>
+              </div>
+              <div class="track-row-right">
+                <span class="song-duration-pill">${escapeHtml(s.duration || '03:45')}</span>
+                <button type="button" class="btn-secondary btn-preview-supabase-song" style="padding:0.3rem 0.55rem; font-size:0.78rem;" title="Listen Preview">
+                  ▶ Listen
+                </button>
+                <button type="button" class="btn-primary btn-add-supabase-song" style="padding:0.3rem 0.65rem; font-size:0.78rem;">
+                  + Add
+                </button>
+              </div>
+            </div>
+          `
+          )
+          .join('');
+
+        // Preview Button
+        supabaseResults.querySelectorAll('.btn-preview-supabase-song').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const row = btn.closest('.library-track-row');
+            const song = JSON.parse(row.getAttribute('data-song').replace(/&apos;/g, "'"));
+            await playModalPreview(song);
+          });
+        });
+
+        // Add Button
+        supabaseResults.querySelectorAll('.btn-add-supabase-song').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const row = btn.closest('.library-track-row');
+            const song = JSON.parse(row.getAttribute('data-song').replace(/&apos;/g, "'"));
+            formSongs.push({
+              id: song.id,
+              song_id: song.song_id || song.id,
+              track_id: null,
+              source: 'supabase',
+              title: song.title,
+              artist: song.artist,
+              album: song.album,
+              duration: song.duration,
+              duration_seconds: song.duration_seconds,
+              stream_url: null
+            });
+            renderFormSongs();
+            showToast(`Added "${song.title}" to playlist (Supabase)`, 'success');
+          });
+        });
+      } catch (err) {
+        console.error('Failed to load Supabase Library:', err);
+        supabaseResults.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--danger); font-size:0.85rem;">Failed to load Supabase Library.</div>';
       }
+    }
+
+    supabaseInput?.addEventListener('input', () => {
+      clearTimeout(supabaseSearchDebounce);
+      supabaseSearchDebounce = setTimeout(() => {
+        loadSupabaseTracks(supabaseInput.value.trim());
+      }, 250);
     });
 
-    // Custom track button
+    // 4. In-Modal Audio Preview Manager
+    const previewBar = document.getElementById('scheduleModalPreviewBar');
+    const previewName = document.getElementById('schedPreviewTrackName');
+    const previewAudio = document.getElementById('schedModalAudio');
+    const previewClose = document.getElementById('closeSchedModalPreview');
+
+    async function playModalPreview(song) {
+      if (!song || !song.id) return;
+      try {
+        showToast(`Generating secure preview for "${song.title}"...`, 'info');
+        const resp = await apiClient.post(`/admin/songs/${song.id}/signed-url?expiresIn=300`);
+        const signedUrl = resp && resp.data ? resp.data.signedUrl : null;
+        if (!signedUrl) throw new Error('Signed URL could not be created.');
+
+        if (previewName) previewName.textContent = `${song.title} - ${song.artist || 'Unknown'}`;
+        if (previewAudio) {
+          previewAudio.src = signedUrl;
+          previewAudio.play().catch((err) => console.warn('Modal preview autoplay prevented:', err));
+        }
+        if (previewBar) previewBar.style.display = 'flex';
+      } catch (err) {
+        showToast('Preview error: ' + err.message, 'error');
+      }
+    }
+
+    previewClose?.addEventListener('click', stopModalPreview);
+
+    // 5. Custom Track Button (General Library)
     const customTrackBtn = document.getElementById('addCustomTrackBtn');
     if (customTrackBtn) {
       customTrackBtn.addEventListener('click', () => {
@@ -1180,14 +1397,32 @@
         const duration = prompt('Enter Duration (MM:SS):', '03:45') || '03:45';
 
         formSongs.push({
+          id: 'custom_' + Math.random().toString(36).substring(2, 9),
+          track_id: null,
+          song_id: null,
+          source: 'general',
           title: title.trim(),
           artist: artist.trim(),
+          album: 'Custom Audio',
           duration: duration.trim(),
-          duration_seconds: timeToMinutes(duration) * 60
+          duration_seconds: timeToMinutes(duration) * 60,
+          stream_url: null
         });
         renderFormSongs();
+        showToast(`Added custom track "${title.trim()}"`, 'success');
       });
     }
+
+    // Expose helpers for modal open
+    window.refreshScheduleModalLibraries = () => {
+      loadGeneralTracks();
+      if (currentActiveTab === 'supabase') {
+        loadSupabaseTracks();
+      }
+    };
+
+    // Load initial catalogue
+    loadGeneralTracks();
   }
 
   // --------------------------------------------------------------------------

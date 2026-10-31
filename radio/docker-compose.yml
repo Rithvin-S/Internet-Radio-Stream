@@ -1,0 +1,26 @@
+services:
+  icecast:
+    image: infiniteproject/icecast
+    container_name: pulsecast-icecast
+    ports:
+      - "8000:8000"
+    environment:
+      ICECAST_SOURCE_PASSWORD: Rithvin@2411
+      ICECAST_ADMIN_PASSWORD: Rithvin@2411
+      ICECAST_PASSWORD: Rithvin@2411
+      ICECAST_RELAY_PASSWORD: Rithvin@2411
+    restart: unless-stopped
+
+  liquidsoap:
+    image: savonet/liquidsoap:v2.3.3
+    container_name: pulsecast-liquidsoap
+    depends_on:
+      - icecast
+    ports:
+      - "127.0.0.1:1234:1234"
+    volumes:
+      - ./cache:/cache:ro
+      - ./music:/music:ro
+      - ./radio.liq:/radio.liq:ro
+    command: ["liquidsoap", "/radio.liq"]
+    restart: unless-stopped

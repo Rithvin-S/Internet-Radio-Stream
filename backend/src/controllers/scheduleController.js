@@ -58,9 +58,15 @@ function extractMetadata(desc) {
   if (desc.startsWith('{') && desc.endsWith('}')) {
     try {
       const parsed = JSON.parse(desc);
+      const rawSongs = Array.isArray(parsed.songs) ? parsed.songs : [];
+      const normalizedSongs = rawSongs.map((s) => ({
+        ...s,
+        source: s.source || (s.song_id ? 'supabase' : 'general'),
+        track_id: s.track_id || (s.song_id ? null : (!isNaN(Number(s.id)) ? Number(s.id) : null))
+      }));
       return {
         cleanDesc: parsed.notes || parsed.description || '',
-        songs: Array.isArray(parsed.songs) ? parsed.songs : [],
+        songs: normalizedSongs,
         category: parsed.category || 'Music',
         date: parsed.schedule_date || null
       };
@@ -76,8 +82,20 @@ function extractMetadata(desc) {
  */
 function packageDescription(desc, category, date, songs) {
   const sanitizedSongs = (Array.isArray(songs) ? songs : []).map((s) => {
-    const clean = { ...s };
-    if (clean.stream_url && (clean.stream_url.includes('token=') || clean.stream_url.includes('/signed-url') || clean.song_id)) {
+    const isSupabase = s.source === 'supabase' || Boolean(s.song_id);
+    const clean = {
+      id: s.id,
+      song_id: isSupabase ? (s.song_id || (s.id && isNaN(Number(s.id)) ? s.id : null)) : null,
+      track_id: !isSupabase ? (s.track_id || (!isNaN(Number(s.id)) ? Number(s.id) : null)) : null,
+      source: isSupabase ? 'supabase' : 'general',
+      title: s.title ? s.title.trim() : 'Untitled Track',
+      artist: s.artist ? s.artist.trim() : null,
+      album: s.album ? s.album.trim() : null,
+      duration: s.duration || '03:45',
+      duration_seconds: s.duration_seconds || 225,
+      stream_url: isSupabase ? null : s.stream_url
+    };
+    if (clean.stream_url && (clean.stream_url.includes('token=') || clean.stream_url.includes('/signed-url'))) {
       clean.stream_url = null;
     }
     return clean;
@@ -675,81 +693,90 @@ async function adminToggleSchedulePublish(req, res, next) {
 }
 
 /**
- * GET /api/admin/songs/search?q=...
- * Search song library from approved tracks catalogue
+ * GET /api/admin/songs/search?q=...&source=general|supabase|all
+ * Search music library entries categorized by source (General Library vs Supabase Library)
  */
 async function adminSearchSongs(req, res, next) {
   try {
-    const query = (req.query.q || '').trim();
+    const query = (req.query.q || req.query.search || '').trim();
+    const source = (req.query.source || 'all').toLowerCase(); // 'general' | 'supabase' | 'all'
 
     const seen = new Set();
     const songs = [];
 
-    // 1. Search permanent Song Library
-    try {
-      const libResult = await songService.getSongsList({ search: query, limit: 30, activeOnly: true });
-      for (const s of libResult.songs || []) {
-        const key = `${s.title}_${s.artist || ''}`.toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
-          songs.push({
-            id: s.id,
-            song_id: s.id,
-            title: s.title,
-            artist: s.artist || 'Unknown Artist',
-            album: s.album || '',
-            duration: s.duration || '03:45',
-            duration_seconds: s.duration_seconds || 225,
-            stream_url: null,
-            preview_url: s.storage_path ? `/api/admin/songs/${s.id}/signed-url` : null,
-            source: 'library'
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('[SCHEDULES] Library search notice:', err.message);
-    }
-
-    // 2. Also search upcoming_tracks catalogue for broader results
-    const supabase = getSupabase();
-    if (supabase) {
+    // 1. Search Supabase Storage Library if requested
+    if (source === 'supabase' || source === 'all' || source === 'library') {
       try {
-        let trackQuery = supabase
-          .from('upcoming_tracks')
-          .select('id, title, artist, album, duration, stream_url')
-          .order('id', { ascending: true });
-
-        if (query) {
-          trackQuery = trackQuery.or(`title.ilike.%${query}%,artist.ilike.%${query}%`);
-        }
-
-        const { data, error } = await trackQuery.limit(30);
-        if (!error && Array.isArray(data)) {
-          for (const t of data) {
-            const key = `${t.title}_${t.artist}`.toLowerCase();
-            if (!seen.has(key)) {
-              seen.add(key);
-              songs.push({
-                id: t.id,
-                title: t.title,
-                artist: t.artist,
-                album: t.album,
-                duration: t.duration || '03:45',
-                duration_seconds: timeToMinutes(t.duration || '03:45'),
-                stream_url: t.stream_url,
-                source: 'catalogue'
-              });
-            }
+        const libResult = await songService.getSongsList({ search: query, limit: 50, activeOnly: true });
+        for (const s of libResult.songs || []) {
+          const key = `supabase_${s.id}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            songs.push({
+              id: s.id,
+              song_id: s.id,
+              track_id: null,
+              title: s.title,
+              artist: s.artist || 'Unknown Artist',
+              album: s.album || '',
+              duration: s.duration || '03:45',
+              duration_seconds: s.duration_seconds || 225,
+              stream_url: null,
+              preview_url: `/api/admin/songs/${s.id}/signed-url`,
+              source: 'supabase'
+            });
           }
         }
       } catch (err) {
-        // Non-blocking
+        console.warn('[SCHEDULES] Supabase Library search notice:', err.message);
+      }
+    }
+
+    // 2. Search General Library (upcoming_tracks catalogue) if requested
+    if (source === 'general' || source === 'all' || source === 'catalogue') {
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          let trackQuery = supabase
+            .from('upcoming_tracks')
+            .select('id, station_id, title, artist, album, duration, stream_url')
+            .order('id', { ascending: true });
+
+          if (query) {
+            trackQuery = trackQuery.or(`title.ilike.%${query}%,artist.ilike.%${query}%,album.ilike.%${query}%`);
+          }
+
+          const { data, error } = await trackQuery.limit(50);
+          if (!error && Array.isArray(data)) {
+            for (const t of data) {
+              const key = `general_${t.id}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                songs.push({
+                  id: t.id,
+                  track_id: t.id,
+                  song_id: null,
+                  title: t.title,
+                  artist: t.artist || 'Unknown Artist',
+                  album: t.album || '',
+                  duration: t.duration || '03:45',
+                  duration_seconds: timeToMinutes(t.duration || '03:45') * 60,
+                  stream_url: t.stream_url || null,
+                  source: 'general'
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[SCHEDULES] General Library search notice:', err.message);
+        }
       }
     }
 
     res.status(200).json({
       success: true,
       count: songs.length,
+      source,
       data: songs
     });
   } catch (err) {

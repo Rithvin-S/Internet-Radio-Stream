@@ -98,7 +98,10 @@ app.use((req, res, next) => {
   res.on('finish', () => {
     const duration = Date.now() - start;
     if (!req.originalUrl.startsWith('/css') && !req.originalUrl.startsWith('/js') && !req.originalUrl.startsWith('/assets')) {
-      console.log(`[API] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`);
+      const safeUrl = req.originalUrl
+        .replace(/radio_token=[^&]+/gi, 'radio_token=[REDACTED]')
+        .replace(/token=[^&]+/gi, 'token=[REDACTED]');
+      console.log(`[API] ${req.method} ${safeUrl} -> ${res.statusCode} (${duration}ms)`);
     }
   });
   next();

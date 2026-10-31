@@ -33,8 +33,8 @@ function sanitizeFilename(originalName) {
     return 'audio_track.mp3';
   }
 
-  const basename = path.basename(originalName);
-  const ext = path.extname(basename).toLowerCase();
+  const basename = path.basename(originalName.trim());
+  const ext = path.extname(basename).toLowerCase().trim();
   const nameWithoutExt = path.basename(basename, ext);
 
   // Remove control characters, path separators, and normalize
@@ -56,8 +56,8 @@ function validateAudioFile(file, customMaxBytes = MAX_AUDIO_SIZE_BYTES) {
     return { valid: false, error: 'No audio file provided.' };
   }
 
-  const originalName = file.originalname || '';
-  const ext = path.extname(originalName).toLowerCase();
+  const originalName = (file.originalname || '').trim();
+  const ext = path.extname(originalName).toLowerCase().trim();
   const mimeType = (file.mimetype || '').toLowerCase();
   const size = file.size || (file.buffer ? file.buffer.length : 0);
 
