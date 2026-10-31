@@ -29,11 +29,18 @@ const apiClient = {
   },
 
   async request(endpoint, options = {}) {
-    const url = `${API_BASE}${endpoint}`;
-    const headers = {
-      'Content-Type': 'application/json',
-      ...options.headers
-    };
+    // Avoid double /api prefix if endpoint already includes /api
+    let cleanEndpoint = endpoint;
+    if (cleanEndpoint.startsWith('/api/')) {
+      cleanEndpoint = cleanEndpoint.substring(4);
+    }
+    const url = `${API_BASE}${cleanEndpoint}`;
+    const headers = { ...options.headers };
+
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    if (!isFormData && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     const token = this.getToken();
     if (token) {
@@ -46,7 +53,7 @@ const apiClient = {
       credentials: 'include' // Sends HttpOnly cookie automatically
     };
 
-    if (config.body && typeof config.body === 'object') {
+    if (!isFormData && config.body && typeof config.body === 'object') {
       config.body = jsonSafeStringify(config.body);
     }
 
@@ -88,6 +95,10 @@ const apiClient = {
 
   delete(endpoint, headers = {}) {
     return this.request(endpoint, { method: 'DELETE', headers });
+  },
+
+  upload(endpoint, formData, headers = {}) {
+    return this.request(endpoint, { method: 'POST', body: formData, headers });
   }
 };
 

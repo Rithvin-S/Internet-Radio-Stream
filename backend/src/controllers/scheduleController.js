@@ -7,6 +7,7 @@
 const db = require('../config/db');
 const { getSupabase } = require('../config/supabase');
 const { validateScheduleInput } = require('../validators/scheduleValidator');
+const songService = require('../services/songService');
 
 /**
  * Converts "HH:MM" string to minutes from midnight
@@ -74,11 +75,19 @@ function extractMetadata(desc) {
  * Package description with metadata for backward-compatibility and persistence
  */
 function packageDescription(desc, category, date, songs) {
+  const sanitizedSongs = (Array.isArray(songs) ? songs : []).map((s) => {
+    const clean = { ...s };
+    if (clean.stream_url && (clean.stream_url.includes('token=') || clean.stream_url.includes('/signed-url') || clean.song_id)) {
+      clean.stream_url = null;
+    }
+    return clean;
+  });
+
   return JSON.stringify({
     description: (desc || '').trim(),
     category: category || 'Music',
     schedule_date: date || getTodayDateString(),
-    songs: Array.isArray(songs) ? songs : []
+    songs: sanitizedSongs
   });
 }
 
@@ -86,21 +95,13 @@ function packageDescription(desc, category, date, songs) {
  * Fetch tracks assigned to a schedule
  */
 async function fetchScheduleTracks(scheduleId, fallbackSongs = []) {
-  const supabase = getSupabase();
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('schedule_tracks')
-        .select('*')
-        .eq('schedule_id', scheduleId)
-        .order('play_order', { ascending: true });
-
-      if (!error && Array.isArray(data) && data.length > 0) {
-        return data;
-      }
-    } catch {
-      // Table may not be created yet, fallback to metadata
+  try {
+    const tracks = await songService.getSchedulePlaylist(scheduleId);
+    if (Array.isArray(tracks) && tracks.length > 0) {
+      return tracks;
     }
+  } catch {
+    // Fall through to fallback
   }
   return fallbackSongs || [];
 }
@@ -109,28 +110,11 @@ async function fetchScheduleTracks(scheduleId, fallbackSongs = []) {
  * Save assigned tracks for a schedule
  */
 async function saveScheduleTracks(scheduleId, songs) {
-  if (!Array.isArray(songs) || songs.length === 0) return;
-  const supabase = getSupabase();
-  if (!supabase) return;
-
+  if (!Array.isArray(songs)) return;
   try {
-    // Delete existing tracks for this schedule
-    await supabase.from('schedule_tracks').delete().eq('schedule_id', scheduleId);
-
-    const rows = songs.map((s, idx) => ({
-      schedule_id: scheduleId,
-      title: s.title ? s.title.trim() : 'Untitled Song',
-      artist: s.artist ? s.artist.trim() : null,
-      album: s.album ? s.album.trim() : null,
-      duration: s.duration || '03:45',
-      duration_seconds: s.duration_seconds || 225,
-      stream_url: s.stream_url || null,
-      play_order: idx + 1
-    }));
-
-    await supabase.from('schedule_tracks').insert(rows);
-  } catch {
-    // Graceful fallback: tracks are already packaged into description JSON
+    await songService.saveSchedulePlaylist(scheduleId, songs);
+  } catch (err) {
+    console.warn(`[SCHEDULES] saveScheduleTracks notice: ${err.message}`);
   }
 }
 
@@ -698,40 +682,68 @@ async function adminSearchSongs(req, res, next) {
   try {
     const query = (req.query.q || '').trim();
 
-    const supabase = getSupabase();
-    if (!supabase) {
-      return res.status(500).json({ success: false, message: 'Database not available.' });
-    }
-
-    let trackQuery = supabase
-      .from('upcoming_tracks')
-      .select('id, title, artist, album, duration, stream_url')
-      .order('id', { ascending: true });
-
-    if (query) {
-      trackQuery = trackQuery.or(`title.ilike.%${query}%,artist.ilike.%${query}%`);
-    }
-
-    const { data, error } = await trackQuery.limit(30);
-    if (error) throw new Error(error.message);
-
-    // Deduplicate by title + artist
     const seen = new Set();
     const songs = [];
 
-    for (const t of data || []) {
-      const key = `${t.title}_${t.artist}`.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        songs.push({
-          id: t.id,
-          title: t.title,
-          artist: t.artist,
-          album: t.album,
-          duration: t.duration || '03:45',
-          duration_seconds: timeToMinutes(t.duration || '03:45'),
-          stream_url: t.stream_url
-        });
+    // 1. Search permanent Song Library
+    try {
+      const libResult = await songService.getSongsList({ search: query, limit: 30, activeOnly: true });
+      for (const s of libResult.songs || []) {
+        const key = `${s.title}_${s.artist || ''}`.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          songs.push({
+            id: s.id,
+            song_id: s.id,
+            title: s.title,
+            artist: s.artist || 'Unknown Artist',
+            album: s.album || '',
+            duration: s.duration || '03:45',
+            duration_seconds: s.duration_seconds || 225,
+            stream_url: null,
+            preview_url: s.storage_path ? `/api/admin/songs/${s.id}/signed-url` : null,
+            source: 'library'
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[SCHEDULES] Library search notice:', err.message);
+    }
+
+    // 2. Also search upcoming_tracks catalogue for broader results
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        let trackQuery = supabase
+          .from('upcoming_tracks')
+          .select('id, title, artist, album, duration, stream_url')
+          .order('id', { ascending: true });
+
+        if (query) {
+          trackQuery = trackQuery.or(`title.ilike.%${query}%,artist.ilike.%${query}%`);
+        }
+
+        const { data, error } = await trackQuery.limit(30);
+        if (!error && Array.isArray(data)) {
+          for (const t of data) {
+            const key = `${t.title}_${t.artist}`.toLowerCase();
+            if (!seen.has(key)) {
+              seen.add(key);
+              songs.push({
+                id: t.id,
+                title: t.title,
+                artist: t.artist,
+                album: t.album,
+                duration: t.duration || '03:45',
+                duration_seconds: timeToMinutes(t.duration || '03:45'),
+                stream_url: t.stream_url,
+                source: 'catalogue'
+              });
+            }
+          }
+        }
+      } catch (err) {
+        // Non-blocking
       }
     }
 

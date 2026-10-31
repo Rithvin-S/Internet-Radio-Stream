@@ -17,6 +17,7 @@ const stationRoutes = require('./routes/stations');
 const authRoutes = require('./routes/auth');
 const favouriteRoutes = require('./routes/favourites');
 const adminRoutes = require('./routes/admin');
+const streamingRoutes = require('./routes/streaming');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -109,6 +110,7 @@ app.use('/api/stations', stationRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/favourites', favouriteRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/streaming', streamingRoutes);
 
 // 6. Serve Frontend Static Assets and Pages
 const frontendPath = path.join(__dirname, '../../frontend');

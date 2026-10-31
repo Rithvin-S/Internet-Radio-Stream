@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Song Library | PulseCast Radio Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/calendar.css">
+  <link rel="stylesheet" href="/css/songs.css">
+  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Main Site Navigation Bar -->
+    <header class="site-header">
+      <div class="header-container">
+        <div class="brand">
+          <img src="/assets/logo.svg" alt="" class="brand-logo" width="44" height="44">
+          <div class="brand-text">
+            <span class="brand-title">PulseCast</span>
+            <span class="brand-subtitle">Music Library Management</span>
+          </div>
+        </div>
+        <nav class="site-nav" id="siteNav">
+          <a href="/index.html" class="nav-link">Live Player</a>
+          <a href="/stations.html" class="nav-link">Stations</a>
+          <a href="/admin/stations.html" class="nav-link admin-link">Manage Stations</a>
+          <a href="/admin/schedules.html" class="nav-link admin-link">Manage Schedules</a>
+          <a href="/admin/songs.html" class="nav-link admin-link active">Song Library</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main Content Container (Full Width Utilization) -->
+    <main class="main-content">
+      <div class="library-page-container">
+
+        <!-- 1. Page Header -->
+        <header class="library-header">
+          <div class="library-header-titles">
+            <h1>
+              <span>Song Library</span>
+              <span class="header-badge">Supabase Storage</span>
+            </h1>
+            <p>Manage, organize, and upload your radio music collection.</p>
+          </div>
+          <div class="library-header-actions">
+            <button type="button" class="btn-header-secondary" id="openBulkUploadBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Bulk Upload
+            </button>
+            <button type="button" class="btn-header-primary" id="openSingleUploadBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Upload Song
+            </button>
+          </div>
+        </header>
+
+        <!-- 2. Library Statistics Cards (4 KPI Cards from Actual Database Data) -->
+        <section class="library-stats-grid" aria-label="Library Overview Statistics">
+          <!-- Total Songs -->
+          <div class="stat-card">
+            <div class="stat-icon-wrapper stat-icon-purple">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18V5l12-2v13"></path>
+                <circle cx="6" cy="18" r="3"></circle>
+                <circle cx="18" cy="16" r="3"></circle>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Total Songs</div>
+              <div class="stat-value" id="statTotalSongs">0</div>
+              <div class="stat-subtext">Registered in library</div>
+            </div>
+          </div>
+
+          <!-- Active Songs -->
+          <div class="stat-card">
+            <div class="stat-icon-wrapper stat-icon-emerald">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Active Songs</div>
+              <div class="stat-value" id="statActiveSongs">0</div>
+              <div class="stat-subtext" id="statActiveSub">Ready for broadcast</div>
+            </div>
+          </div>
+
+          <!-- Total Storage Used -->
+          <div class="stat-card">
+            <div class="stat-icon-wrapper stat-icon-cyan">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 16.2A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 4 14.9"></path>
+                <polyline points="16 16 12 12 8 16"></polyline>
+                <line x1="12" y1="12" x2="12" y2="21"></line>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Storage Used</div>
+              <div class="stat-value" id="statStorageUsed">0 MB</div>
+              <div class="stat-subtext">Supabase private bucket</div>
+            </div>
+          </div>
+
+          <!-- Total Playing Duration -->
+          <div class="stat-card">
+            <div class="stat-icon-wrapper stat-icon-amber">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">Total Duration</div>
+              <div class="stat-value" id="statTotalDuration">0m 0s</div>
+              <div class="stat-subtext">Total audio catalogue</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Visually Distinct Upload Section -->
+        <section class="library-upload-section" aria-label="Audio Upload Area">
+          <div class="upload-section-header">
+            <div class="upload-section-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <span>Quick Upload Area</span>
+            </div>
+            <div class="dropzone-badges">
+              <span class="format-pill">MP3</span>
+              <span class="format-pill">WAV</span>
+              <span class="format-pill">OGG</span>
+              <span class="format-pill">AAC</span>
+              <span class="format-pill" style="color: var(--primary); font-weight: 700;">Max 50 MB / file</span>
+            </div>
+          </div>
+
+          <!-- Drag and Drop Hero Area -->
+          <div class="upload-dropzone-hero" id="heroDropzone" tabindex="0" role="button" aria-label="Drop audio files here or click to browse">
+            <input type="file" id="heroFileInput" accept=".mp3,.wav,.ogg,.aac" multiple style="display: none;">
+            
+            <div class="dropzone-icon-circle">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18V5l12-2v13"></path>
+                <circle cx="6" cy="18" r="3"></circle>
+                <circle cx="18" cy="16" r="3"></circle>
+              </svg>
+            </div>
+            <div class="dropzone-prompt-main">Drag and drop audio tracks here to upload</div>
+            <div class="dropzone-prompt-sub">Supports single track with metadata or multiple tracks for bulk batch processing</div>
+            
+            <div style="display: flex; justify-content: center; gap: 0.75rem; margin-top: 0.85rem; flex-wrap: wrap;">
+              <button type="button" class="btn-header-secondary" id="browseHeroFilesBtn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
+                Browse Files
+              </button>
+            </div>
+          </div>
+
+          <!-- Inline Active Upload Progress Tray (Shown when files are uploading) -->
+          <div id="heroUploadTray" class="inline-upload-tray" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+              <span style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary);" id="trayStatusTitle">Uploading tracks...</span>
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);" id="trayOverallProgress">0%</span>
+            </div>
+            <div id="trayQueueList">
+              <!-- Dynamically populated upload items -->
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. Search and Filters Toolbar -->
+        <section class="library-toolbar" aria-label="Search and Filter Songs">
+          <!-- Search input -->
+          <div class="toolbar-search-wrapper">
+            <svg class="toolbar-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="songLibrarySearch" class="toolbar-search-input" placeholder="Search by song title, artist, or album..." autocomplete="off">
+            <button type="button" id="clearSearchBtn" class="toolbar-search-clear" style="display: none;" title="Clear search">✕</button>
+          </div>
+
+          <!-- Filters & Sorting Group -->
+          <div class="toolbar-filters-group">
+            <!-- Active / Archived Filter -->
+            <select id="songStatusFilter" class="toolbar-select" aria-label="Filter by Status">
+              <option value="active" selected>Active Songs</option>
+              <option value="all">All Tracks</option>
+              <option value="archived">Archived Only</option>
+            </select>
+
+            <!-- Sort By -->
+            <select id="songSortSelect" class="toolbar-select" aria-label="Sort Songs">
+              <option value="created_at-desc" selected>Recently Added</option>
+              <option value="title-asc">Title (A → Z)</option>
+              <option value="title-desc">Title (Z → A)</option>
+              <option value="artist-asc">Artist (A → Z)</option>
+              <option value="duration_seconds-desc">Duration (Longest)</option>
+            </select>
+
+            <!-- Page Size -->
+            <select id="pageSizeSelect" class="toolbar-select" aria-label="Items per page" style="min-width: 110px;">
+              <option value="10">10 / page</option>
+              <option value="15" selected>15 / page</option>
+              <option value="25">25 / page</option>
+              <option value="50">50 / page</option>
+            </select>
+
+            <!-- Refresh Button -->
+            <button type="button" class="btn-toolbar-refresh" id="refreshSongsBtn" title="Refresh Song Library">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- 5. Recoverable Error State Banner (Initially Hidden) -->
+        <div id="libraryErrorState" class="library-error-box" style="display: none;">
+          <div class="error-title" id="libraryErrorTitle">Failed to Load Songs</div>
+          <p class="error-message-text" id="libraryErrorMessage">An error occurred while communicating with the server.</p>
+          <button type="button" class="btn-header-primary" id="retryLoadBtn">
+            ↻ Retry Loading
+          </button>
+        </div>
+
+        <!-- 6. Spotify-Inspired Full-Width Songs Table -->
+        <section class="songs-table-card" aria-label="Song Catalogue Table">
+          <div class="songs-table-responsive">
+            <table class="songs-table" id="songsTable">
+              <thead>
+                <tr>
+                  <th class="col-song"># / Song</th>
+                  <th class="col-album">Album</th>
+                  <th class="col-duration">Duration</th>
+                  <th class="col-size">File Size</th>
+                  <th class="col-date">Uploaded</th>
+                  <th class="col-status">Status</th>
+                  <th class="col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="songsTableBody">
+                <!-- Populated dynamically via songs.js -->
+                <tr>
+                  <td colspan="7" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                    <div class="spin-icon" style="font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--primary);">↻</div>
+                    <div>Loading music library...</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Empty State (Shown when 0 songs exist) -->
+          <div id="libraryEmptyState" class="library-empty-box" style="display: none;">
+            <div class="empty-icon-circle">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18V5l12-2v13"></path>
+                <circle cx="6" cy="18" r="3"></circle>
+                <circle cx="18" cy="16" r="3"></circle>
+              </svg>
+            </div>
+            <div class="empty-title" id="emptyStateTitle">Your music library is empty</div>
+            <p class="empty-desc" id="emptyStateDesc">Upload your first audio tracks to start building your PulseCast radio catalogue.</p>
+            <div class="empty-actions-row">
+              <button type="button" class="btn-header-primary" onclick="document.getElementById('openSingleUploadBtn').click()">
+                + Upload Song
+              </button>
+              <button type="button" class="btn-header-secondary" onclick="document.getElementById('openBulkUploadBtn').click()">
+                Bulk Upload
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 7. Pagination Toolbar -->
+        <footer class="library-pagination">
+          <div id="songsCountSummary">Showing 0 of 0 songs</div>
+          <div class="pagination-controls">
+            <button type="button" class="btn-page-nav" id="prevPageBtn" disabled>
+              &lsaquo; Prev
+            </button>
+            <span class="pagination-page-label" id="pageIndicator">Page 1 of 1</span>
+            <button type="button" class="btn-page-nav" id="nextPageBtn" disabled>
+              Next &rsaquo;
+            </button>
+          </div>
+        </footer>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- =========================================================================
+       MODALS
+       ========================================================================= -->
+
+  <!-- 1. Redesigned Single Upload Modal -->
+  <div id="singleUploadModal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="singleModalTitle">
+    <div class="modal-content-card">
+      <div class="modal-header-row">
+        <h3 id="singleModalTitle">Upload Audio Track</h3>
+        <button type="button" class="btn-close-x" id="closeSingleModalBtn" aria-label="Close">✕</button>
+      </div>
+
+      <form id="singleUploadForm">
+        <div class="modal-body-pad">
+          <!-- Drop Area inside modal -->
+          <div class="upload-dropzone-hero" id="singleModalDropzone" style="padding: 1.5rem 1rem; margin-bottom: 1.25rem;">
+            <input type="file" id="singleFileInput" accept=".mp3,.wav,.ogg,.aac" style="display: none;">
+            <div class="dropzone-icon-circle" style="width: 44px; height: 44px; margin-bottom: 0.5rem;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </div>
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 0.2rem;">Choose an audio file or drag it here</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary);">MP3, WAV, OGG, or AAC (Max 50 MB)</div>
+          </div>
+
+          <!-- File Selected Info Pill -->
+          <div id="singleFileSelectedInfo" style="display: none; padding: 0.85rem 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; margin-bottom: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary);" id="selectedFileName">filename.mp3</div>
+                <div style="font-size: 0.78rem; color: var(--text-secondary);" id="selectedFileSize">0.0 MB</div>
+              </div>
+              <button type="button" id="clearSingleSelectedFile" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem;">✕</button>
+            </div>
+          </div>
+
+          <!-- Metadata Fields -->
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" for="uploadSongTitle" style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Track Title</label>
+            <input type="text" id="uploadSongTitle" class="toolbar-search-input" placeholder="Title will auto-fill from filename or ID3 tag" style="padding-left: 0.85rem;">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="uploadSongArtist" style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Artist Name</label>
+              <input type="text" id="uploadSongArtist" class="toolbar-search-input" placeholder="e.g. Solar Soundscapes" style="padding-left: 0.85rem;">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="uploadSongAlbum" style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Album Name</label>
+              <input type="text" id="uploadSongAlbum" class="toolbar-search-input" placeholder="e.g. Chillwave Vol. 1" style="padding-left: 0.85rem;">
+            </div>
+          </div>
+
+          <!-- Progress Indicator -->
+          <div id="singleUploadProgressContainer" style="display: none; margin-top: 1rem;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">
+              <span id="uploadProgressStatus">Uploading to Supabase Storage...</span>
+              <span id="uploadProgressPercent">0%</span>
+            </div>
+            <div style="height: 8px; background: var(--border-subtle); border-radius: 999px; overflow: hidden;">
+              <div id="singleProgressBar" style="height: 100%; background: var(--primary); width: 0%; transition: width 0.2s ease;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer-row">
+          <button type="button" class="btn-header-secondary" id="cancelSingleModalBtn">Cancel</button>
+          <button type="submit" class="btn-header-primary" id="startSingleUploadBtn" disabled>Upload to Library</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Redesigned Bulk Upload Modal -->
+  <div id="bulkUploadModal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="bulkModalTitle">
+    <div class="modal-content-card modal-lg">
+      <div class="modal-header-row">
+        <h3 id="bulkModalTitle">Bulk Upload Audio Tracks</h3>
+        <button type="button" class="btn-close-x" id="closeBulkModalBtn" aria-label="Close">✕</button>
+      </div>
+
+      <div class="modal-body-pad">
+        <!-- Multi-file Dropzone -->
+        <div class="upload-dropzone-hero" id="bulkModalDropzone" style="padding: 1.75rem 1rem; margin-bottom: 1.25rem;">
+          <input type="file" id="bulkFileInput" accept=".mp3,.wav,.ogg,.aac" multiple style="display: none;">
+          <div class="dropzone-icon-circle" style="width: 48px; height: 48px; margin-bottom: 0.5rem;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+          </div>
+          <div style="font-weight: 700; font-size: 1rem; color: var(--text-primary); margin-bottom: 0.25rem;">Select multiple audio files</div>
+          <div style="font-size: 0.82rem; color: var(--text-secondary);">Upload up to 20 tracks simultaneously with bounded 3-way concurrency (Max 50 MB / file)</div>
+        </div>
+
+        <!-- Queued files list -->
+        <div id="bulkQueueContainer" style="max-height: 250px; overflow-y: auto; margin-bottom: 1rem; padding-right: 0.25rem;">
+          <!-- Items inserted dynamically -->
+        </div>
+
+        <!-- Summary Banner -->
+        <div id="bulkSummaryBanner" style="display: none; padding: 0.85rem 1rem; border-radius: 8px; font-size: 0.88rem; font-weight: 600; margin-bottom: 1rem;">
+        </div>
+      </div>
+
+      <div class="modal-footer-row">
+        <button type="button" class="btn-header-secondary" id="cancelBulkModalBtn">Close</button>
+        <button type="button" class="btn-header-secondary" id="retryFailedBtn" style="display: none; color: #DC2626; border-color: #DC2626;">Retry Failed</button>
+        <button type="button" class="btn-header-primary" id="startBulkUploadBtn" disabled>Start Bulk Upload</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Edit Metadata Modal -->
+  <div id="editMetadataModal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+    <div class="modal-content-card">
+      <div class="modal-header-row">
+        <h3 id="editModalTitle">Edit Song Details</h3>
+        <button type="button" class="btn-close-x" id="closeEditModalBtn" aria-label="Close">✕</button>
+      </div>
+
+      <form id="editMetadataForm">
+        <input type="hidden" id="editSongId">
+        <div class="modal-body-pad">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" for="editTitleInput" style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Song Title *</label>
+            <input type="text" id="editTitleInput" class="toolbar-search-input" required style="padding-left: 0.85rem;">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="editArtistInput" style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Artist</label>
+              <input type="text" id="editArtistInput" class="toolbar-search-input" style="padding-left: 0.85rem;">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="editAlbumInput" style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem;">Album</label>
+              <input type="text" id="editAlbumInput" class="toolbar-search-input" style="padding-left: 0.85rem;">
+            </div>
+          </div>
+
+          <div class="form-group" style="display: flex; align-items: center; gap: 0.65rem; padding: 0.75rem 1rem; background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: 8px;">
+            <input type="checkbox" id="editActiveInput" style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+            <label for="editActiveInput" style="font-size: 0.88rem; font-weight: 600; color: var(--text-primary); cursor: pointer; margin: 0;">Active in scheduling catalog</label>
+          </div>
+        </div>
+
+        <div class="modal-footer-row">
+          <button type="button" class="btn-header-secondary" id="cancelEditModalBtn">Cancel</button>
+          <button type="submit" class="btn-header-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. Delete / Archive Confirmation Modal -->
+  <div id="deleteConfirmModal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+    <div class="modal-content-card">
+      <div class="modal-header-row">
+        <h3 id="deleteModalTitle">Remove Audio Track</h3>
+        <button type="button" class="btn-close-x" id="closeDeleteModalBtn" aria-label="Close">✕</button>
+      </div>
+
+      <div class="modal-body-pad">
+        <div style="font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem;" id="deleteTrackName">Song Title</div>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1rem;">
+          Choose whether to soft-archive this song (hides it from upcoming schedule pickers while keeping historical schedules intact) or permanently delete the audio binary from Supabase Storage.
+        </p>
+
+        <div id="deleteConflictWarning" style="display: none; padding: 0.75rem 1rem; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; color: #DC2626; font-size: 0.85rem; margin-bottom: 1rem;">
+          <strong>Cannot permanently delete:</strong> This song is assigned to scheduled programs. Please unassign it first or use Archive instead.
+        </div>
+      </div>
+
+      <div class="modal-footer-row">
+        <button type="button" class="btn-header-secondary" id="cancelDeleteModalBtn">Cancel</button>
+        <button type="button" class="btn-header-secondary" id="confirmArchiveBtn" style="color: var(--text-primary);">Archive Song</button>
+        <button type="button" class="btn-header-primary" id="confirmPermanentDeleteBtn" style="background: #DC2626; border-color: #DC2626;">Permanently Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Floating Bottom Audio Preview Bar (Spotify-Style) -->
+  <aside class="preview-player-bar" id="previewPlayerBar" aria-label="Audio Preview Player">
+    <!-- Left: Artwork and Track Info -->
+    <div class="preview-track-left">
+      <div class="preview-artwork-mini" id="previewArtworkThumb">♫</div>
+      <div class="preview-meta-mini">
+        <div class="preview-title-mini" id="previewPlayerTitle">Song Title</div>
+        <div class="preview-artist-mini" id="previewPlayerArtist">Artist Name</div>
+      </div>
+    </div>
+
+    <!-- Center: Audio Element -->
+    <div class="preview-audio-center">
+      <audio id="previewAudioElement" controls controlsList="nodownload"></audio>
+    </div>
+
+    <!-- Right: Actions -->
+    <div class="preview-actions-right">
+      <button type="button" class="btn-close-preview" id="closePreviewPlayerBtn" title="Close Preview Player">
+        ✕ Close
+      </button>
+    </div>
+  </aside>
+
+  <!-- Global Toast Notification -->
+  <div id="libraryToast" class="calendar-toast" style="bottom: 85px;"></div>
+
+  <!-- Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/songs.js"></script>
+</body>
+</html>
