@@ -122,5 +122,6 @@ function requireAdmin(req, res, next) {
 module.exports = {
   authenticateUser,
   optionalAuth,
-  requireAdmin
+  requireAdmin,
+  extractToken
 };

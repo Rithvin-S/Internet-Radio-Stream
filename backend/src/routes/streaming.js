@@ -10,56 +10,99 @@
  * - Exposes radio endpoints for Liquidsoap / EC2 radio playback worker
  */
 
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const songService = require('../services/songService');
 const streamingService = require('../services/streamingService');
 const { getSupabase } = require('../config/supabase');
-const { authenticateUser, requireAdmin } = require('../middleware/auth');
+const { authenticateUser, requireAdmin, extractToken } = require('../middleware/auth');
 
 /**
- * Authorization Guard for Radio Playback & Signed URL streaming
- * Only authorized EC2 radio daemon (via x-radio-token) or administrators can request streaming tracks.
- * Rejects the default hardcoded token in production mode.
+ * Timing-safe string comparison to prevent side-channel timing attacks
+ */
+function safeCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * Authorization Guard for Radio Playback & Liquidsoap Streaming Bridge
+ *
+ * Implements strict multi-tier streaming authentication:
+ * 1. Server-to-server EC2 daemon authentication via HTTP header `x-radio-token`
+ *    - Validated against process.env.RADIO_STREAMING_KEY
+ *    - Rejects request with HTTP 500 if server streaming key is not configured
+ *    - Rejects invalid tokens with HTTP 401
+ *    - Strictly ignores tokens in query parameters (URL tokens not permitted)
+ * 2. Administrator authentication via Bearer JWT (for admin previews and playback controls)
+ *    - Preserves admin role verification
+ *    - Rejects non-admin listeners with HTTP 403
+ *    - Rejects invalid or expired JWTs with HTTP 401
+ * 3. Rejects missing credentials with clear HTTP 401 (avoids web login redirect)
+ * 4. Never exposes secrets in logs or responses
  */
 function requireStreamingAuth(req, res, next) {
-  const radioToken = req.headers['x-radio-token'] || req.query.radio_token;
-  const configuredKey = process.env.RADIO_STREAMING_KEY || process.env.STREAMING_SECRET;
-  const isProduction = process.env.NODE_ENV === 'production';
+  // 1. Extract token from HTTP header ONLY (ignore query parameters)
+  const radioToken = req.headers['x-radio-token'];
 
-  // 1. Enforce production security check: reject default token
-  if (isProduction) {
-    if (!configuredKey || configuredKey === 'pulsecast_streaming_secure_token_key') {
-      console.error('[STREAMING AUTH] CRITICAL: RADIO_STREAMING_KEY must be configured in production.');
+  // Read server-configured secret key
+  const rawKey = process.env.RADIO_STREAMING_KEY || process.env.STREAMING_SECRET;
+  const configuredKey = rawKey ? rawKey.trim().replace(/^["']|["']$/g, '') : null;
+
+  // 2. Server-to-server daemon authentication path (x-radio-token header provided)
+  if (radioToken !== undefined && radioToken !== null && radioToken !== '') {
+    // Reject request if server configuration is missing
+    if (!configuredKey) {
+      console.error('[STREAMING AUTH] Server configuration error: RADIO_STREAMING_KEY is not configured.');
       return res.status(500).json({
         success: false,
-        message: 'Streaming authorization key configuration error.'
+        message: 'Streaming authorization key is not configured on the server.'
       });
     }
-  }
 
-  const expectedSecret = configuredKey || 'pulsecast_streaming_secure_token_key';
-
-  // 2. Radio Token Authentication
-  if (radioToken) {
-    if (radioToken === expectedSecret) {
+    const cleanClientToken = typeof radioToken === 'string' ? radioToken.trim().replace(/^["']|["']$/g, '') : '';
+    if (safeCompare(cleanClientToken, configuredKey)) {
+      req.isRadioDaemon = true;
       return next();
     }
+
     return res.status(401).json({
       success: false,
       message: 'Invalid radio streaming token.'
     });
   }
 
-  // 3. Fallback to Admin JWT (for Admin dashboard tests and control)
-  return authenticateUser(req, res, (err) => {
-    if (err) {
-      return res.status(401).json({
-        success: false,
-        message: 'Missing or invalid streaming authorization credentials.'
-      });
-    }
-    return requireAdmin(req, res, next);
+  // 3. Admin JWT authentication path (Preserve admin JWT authentication)
+  const jwtToken = extractToken ? extractToken(req) : (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.substring(7) : null);
+  if (jwtToken) {
+    return authenticateUser(req, res, (err) => {
+      if (err) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid authentication token.'
+        });
+      }
+      return requireAdmin(req, res, next);
+    });
+  }
+
+  // 4. Missing credentials path (Neither x-radio-token nor Admin JWT was provided)
+  // Reject if server configuration is missing
+  if (!configuredKey) {
+    console.error('[STREAMING AUTH] Server configuration error: RADIO_STREAMING_KEY is not configured.');
+    return res.status(500).json({
+      success: false,
+      message: 'Streaming authorization key is not configured on the server.'
+    });
+  }
+
+  return res.status(401).json({
+    success: false,
+    message: 'Authentication required. Missing x-radio-token header or admin authorization.'
   });
 }
 
