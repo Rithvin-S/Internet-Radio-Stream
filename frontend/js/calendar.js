@@ -26,6 +26,12 @@
   let draggedDurationMinutes = 60;
   let draggedStationId = null;
 
+  // Optimistic UI & Concurrency Control State
+  const scheduleMutationVersions = new Map(); // scheduleId -> version number
+  const originalScheduleSnapshots = new Map(); // scheduleId -> original state snapshot
+  const activeRescheduleRequests = new Map(); // scheduleId -> inFlightKey
+  let toastTimeoutTimer = null;
+
   // Harmonious station palette with rich contrast (Aurora Light theme compliant)
   const STATION_PALETTE = [
     { border: '#0891b2', bg: 'rgba(6, 182, 212, 0.12)', text: '#0e7490' },  // Cyan
@@ -145,12 +151,20 @@
     const toast = document.getElementById('calendarToast');
     if (!toast) return;
 
+    if (toastTimeoutTimer) {
+      clearTimeout(toastTimeoutTimer);
+      toastTimeoutTimer = null;
+    }
+
     toast.textContent = message;
     toast.className = `calendar-toast show ${type}`;
 
-    setTimeout(() => {
-      toast.className = 'calendar-toast';
-    }, 3500);
+    if (type !== 'pending') {
+      toastTimeoutTimer = setTimeout(() => {
+        toast.className = 'calendar-toast';
+        toastTimeoutTimer = null;
+      }, 3500);
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -450,10 +464,11 @@
     const heightPx = Math.min(duration, 1440 - topPx);
     const colorCfg = getStationColorConfig(s.station_id);
     const isDraft = !s.is_published;
+    const isOptimistic = Boolean(s.is_optimistic);
 
     if (isShort) {
       return `
-        <div class="timeline-event-block compact ${isDraft ? 'draft' : ''}" 
+        <div class="timeline-event-block compact ${isDraft ? 'draft' : ''} ${isOptimistic ? 'optimistic-pending' : ''}" 
              draggable="true"
              style="top: ${topPx}px; height: ${heightPx}px; border-left-color: ${colorCfg.border};" 
              data-schedule-id="${s.id}"
@@ -464,13 +479,14 @@
           <div class="event-block-title" style="color: ${colorCfg.text};">${escapeHtml(s.title)}</div>
           <div class="event-block-meta">
             <span>${escapeHtml(s.start_time)}</span>
+            ${isOptimistic ? '<span style="font-size:0.65rem; color:var(--primary); font-weight:700;">Saving...</span>' : ''}
           </div>
         </div>
       `;
     }
 
     return `
-      <div class="timeline-event-block ${isDraft ? 'draft' : ''}" 
+      <div class="timeline-event-block ${isDraft ? 'draft' : ''} ${isOptimistic ? 'optimistic-pending' : ''}" 
            draggable="true"
            style="top: ${topPx}px; height: ${heightPx}px; border-left-color: ${colorCfg.border};" 
            data-schedule-id="${s.id}"
@@ -483,6 +499,7 @@
           <span class="event-block-station" style="color: ${colorCfg.text};">${escapeHtml(s.station_name)}</span>
           <span>${escapeHtml(s.start_time)} - ${escapeHtml(s.end_time)}</span>
           ${isDraft ? '<span class="badge-status inactive" style="font-size:0.65rem; padding:0.1rem 0.35rem;">Draft</span>' : ''}
+          ${isOptimistic ? '<span class="badge-status" style="font-size:0.65rem; padding:0.1rem 0.35rem; background:rgba(79,70,229,0.12); color:var(--primary);">Saving...</span>' : ''}
         </div>
         ${s.description && duration >= 60 ? `<div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.25rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(s.description)}</div>` : ''}
       </div>
@@ -611,7 +628,7 @@
       });
 
       // Drop on Column
-      col.addEventListener('drop', async (e) => {
+      col.addEventListener('drop', (e) => {
         e.preventDefault();
         col.classList.remove('drag-over');
         col.querySelector('.drop-preview-indicator')?.remove();
@@ -628,47 +645,165 @@
         const newEndTime = minutesToTime(newEndMinutes);
         const newDate = col.getAttribute('data-date') || formatDateKey(currentDate);
 
-        await rescheduleEvent(scheduleId, newDate, newStartTime, newEndTime);
+        rescheduleEvent(scheduleId, newDate, newStartTime, newEndTime);
       });
     });
   }
 
   // --------------------------------------------------------------------------
-  // Drag-and-Drop Reschedule Execution & Conflict Handling
+  // Drag-and-Drop Reschedule Execution (Optimistic UI with Concurrency Control)
   // --------------------------------------------------------------------------
-  async function rescheduleEvent(scheduleId, newDate, newStartTime, newEndTime) {
-    try {
-      // 1. Fetch current schedule details
-      const resp = await apiClient.get(`/admin/schedules/${scheduleId}`);
-      const sched = resp && resp.data ? resp.data : null;
-      if (!sched) return;
+  function rescheduleEvent(scheduleId, newDate, newStartTime, newEndTime) {
+    if (!scheduleId) return;
 
-      const payload = {
-        station_id: sched.station_id,
-        title: sched.title,
-        schedule_date: newDate,
-        start_time: newStartTime,
-        end_time: newEndTime,
-        category: sched.category || 'Music',
-        description: sched.description || '',
-        is_published: sched.is_published,
-        songs: sched.songs || []
-      };
+    // 1. Find schedule in local memory
+    let schedIndex = schedulesList.findIndex((s) => String(s.id) === String(scheduleId));
+    let sched = schedIndex !== -1 ? schedulesList[schedIndex] : null;
 
-      // 2. Perform backend update with conflict validation
-      await apiClient.put(`/admin/schedules/${scheduleId}`, payload);
-
-      showToast(`Rescheduled "${sched.title}" to ${newStartTime} - ${newEndTime}`, 'success');
-      await loadSchedules();
-    } catch (err) {
-      if (err.status === 409 || err.conflict || (err.message && err.message.toLowerCase().includes('conflict'))) {
-        showToast(`Cannot reschedule: ${err.message || 'Overlaps with another programme'}`, 'error');
-      } else {
-        showToast(err.message || 'Failed to reschedule event', 'error');
-      }
-      // Re-render to ensure visual consistency
-      renderCalendar();
+    if (!sched) {
+      // Fallback: If not in memory, fetch and then update
+      apiClient.get(`/admin/schedules/${scheduleId}`).then((resp) => {
+        if (resp && resp.data) {
+          schedulesList.push(resp.data);
+          rescheduleEvent(scheduleId, newDate, newStartTime, newEndTime);
+        }
+      }).catch(() => {
+        showToast('Failed to reschedule. Schedule not found.', 'error');
+      });
+      return;
     }
+
+    // 2. Prevent duplicate / no-op requests for the exact same target
+    if (sched.schedule_date === newDate && sched.start_time === newStartTime && sched.end_time === newEndTime && !sched.is_optimistic) {
+      return; // Already at this target slot
+    }
+
+    const inFlightKey = `${scheduleId}:${newDate}:${newStartTime}:${newEndTime}`;
+    if (activeRescheduleRequests.has(scheduleId) && activeRescheduleRequests.get(scheduleId) === inFlightKey) {
+      return; // Identical request already in flight
+    }
+    activeRescheduleRequests.set(scheduleId, inFlightKey);
+
+    // 3. Save original event state before optimistic mutation if not already saved
+    if (!originalScheduleSnapshots.has(scheduleId)) {
+      originalScheduleSnapshots.set(scheduleId, { ...sched });
+    }
+
+    // 4. Increment mutation version to safely handle multiple rapid drags
+    const mutationVersion = (scheduleMutationVersions.get(scheduleId) || 0) + 1;
+    scheduleMutationVersions.set(scheduleId, mutationVersion);
+
+    // 5. Optimistically update local calendar state immediately
+    schedulesList[schedIndex] = {
+      ...sched,
+      schedule_date: newDate,
+      start_time: newStartTime,
+      end_time: newEndTime,
+      is_recurring: false,
+      is_optimistic: true
+    };
+
+    // Keep active details drawer in sync if open for this schedule
+    if (activeDetailsSchedule && String(activeDetailsSchedule.id) === String(scheduleId)) {
+      activeDetailsSchedule.schedule_date = newDate;
+      activeDetailsSchedule.start_time = newStartTime;
+      activeDetailsSchedule.end_time = newEndTime;
+      const detailsDate = document.getElementById('detailsDate');
+      const detailsTime = document.getElementById('detailsTime');
+      if (detailsDate) detailsDate.textContent = newDate;
+      if (detailsTime) detailsTime.textContent = `${newStartTime} - ${newEndTime}`;
+    }
+
+    // 6. Immediate frontend update (instantly moves the event in UI)
+    renderCalendar();
+
+    // 7. Display immediate pending notification
+    showToast('Rescheduling...', 'pending');
+
+    // 8. Prepare payload and send API request asynchronously in background
+    const payload = {
+      station_id: sched.station_id,
+      title: sched.title,
+      schedule_date: newDate,
+      start_time: newStartTime,
+      end_time: newEndTime,
+      category: sched.category || 'Music',
+      description: sched.description || '',
+      is_published: sched.is_published,
+      songs: sched.songs || []
+    };
+
+    apiClient
+      .put(`/admin/schedules/${scheduleId}`, payload)
+      .then((resp) => {
+        // Clear in-flight record
+        if (activeRescheduleRequests.get(scheduleId) === inFlightKey) {
+          activeRescheduleRequests.delete(scheduleId);
+        }
+
+        // Only commit if this was the latest mutation
+        if (scheduleMutationVersions.get(scheduleId) === mutationVersion) {
+          // Clear original snapshot since confirmed
+          originalScheduleSnapshots.delete(scheduleId);
+
+          // Update local schedule with confirmed backend attributes and remove optimistic flag
+          const idx = schedulesList.findIndex((s) => String(s.id) === String(scheduleId));
+          if (idx !== -1) {
+            const confirmedData = resp && resp.data ? resp.data : {};
+            schedulesList[idx] = {
+              ...schedulesList[idx],
+              ...confirmedData,
+              is_optimistic: false
+            };
+          }
+
+          // Remove pending visual indicators without full reload
+          renderCalendar();
+
+          // 9. Update toast to confirmed success message
+          showToast('Schedule rescheduled successfully!', 'success');
+        }
+      })
+      .catch(async (err) => {
+        // Clear in-flight record
+        if (activeRescheduleRequests.get(scheduleId) === inFlightKey) {
+          activeRescheduleRequests.delete(scheduleId);
+        }
+
+        // A newer drag superseded this request; a failed update cannot overwrite a newer update
+        if (scheduleMutationVersions.get(scheduleId) !== mutationVersion) {
+          return;
+        }
+
+        // 10. Rollback to original event state on failure
+        const original = originalScheduleSnapshots.get(scheduleId);
+        originalScheduleSnapshots.delete(scheduleId);
+
+        if (original) {
+          const idx = schedulesList.findIndex((s) => String(s.id) === String(scheduleId));
+          if (idx !== -1) {
+            schedulesList[idx] = { ...original, is_optimistic: false };
+          }
+
+          if (activeDetailsSchedule && String(activeDetailsSchedule.id) === String(scheduleId)) {
+            activeDetailsSchedule.schedule_date = original.schedule_date;
+            activeDetailsSchedule.start_time = original.start_time;
+            activeDetailsSchedule.end_time = original.end_time;
+            const detailsDate = document.getElementById('detailsDate');
+            const detailsTime = document.getElementById('detailsTime');
+            if (detailsDate) detailsDate.textContent = original.schedule_date;
+            if (detailsTime) detailsTime.textContent = `${original.start_time} - ${original.end_time}`;
+          }
+
+          renderCalendar();
+        } else {
+          // Fallback sync with server
+          await loadSchedules();
+        }
+
+        // 11. Display failure toast
+        showToast('Failed to reschedule. Your previous schedule has been restored.', 'error');
+      });
   }
 
   function updateViewButtons() {

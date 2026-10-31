@@ -478,6 +478,12 @@
   border-left-style: dashed;
 }
 
+.timeline-event-block.optimistic-pending {
+  opacity: 0.92;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.4), 0 2px 8px rgba(15, 23, 42, 0.08);
+  transition: opacity 0.2s ease, box-shadow 0.2s ease;
+}
+
 .event-block-title {
   font-weight: 700;
   color: var(--text-primary);
@@ -1034,6 +1040,25 @@
   border-color: #10b981;
   background: var(--state-playing-bg);
   color: #047857;
+}
+
+.calendar-toast.pending {
+  border-color: var(--primary);
+  background: var(--bg-surface);
+  color: var(--primary);
+}
+
+.calendar-toast.pending::before {
+  content: '';
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(79, 70, 229, 0.25);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 0.35rem;
+  flex-shrink: 0;
 }
 
 /* --------------------------------------------------------------------------

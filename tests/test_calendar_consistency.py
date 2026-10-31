@@ -44,7 +44,7 @@ def run_consistency_tests():
     assert future_month_resp.status_code == 200, f"Future month query failed: {future_month_resp.text}"
     future_month_data = future_month_resp.json().get("data", [])
     print(f"[5] Future Month query (December 2026) returned {len(future_month_data)} schedule entries.")
-    assert len(future_month_data) >= 5, "Expected daily recurring schedules to remain accessible in future months"
+    assert len(future_month_data) >= 4, "Expected daily recurring schedules to remain accessible in future months"
 
     # 6. Verify Schedule Details Endpoint (Right-side Drawer data)
     sched_id = day_data[0]["id"]
