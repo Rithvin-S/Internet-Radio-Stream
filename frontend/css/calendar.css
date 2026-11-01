@@ -762,19 +762,21 @@
 }
 
 /* --------------------------------------------------------------------------
-   5. Modal Dialogs (Create & Edit Form)
+   5. Modal Dialogs (Create & Edit Form - Viewport-Aware Architecture)
    -------------------------------------------------------------------------- */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  padding: 1.5rem;
+  padding: 1.25rem 1rem;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .modal-dialog {
@@ -782,50 +784,134 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 650px;
+  max-width: 680px;
   max-height: 90vh;
+  max-height: min(90vh, 880px);
   display: flex;
   flex-direction: column;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.05);
   animation: modalFadeIn 0.2s ease-out;
+  overflow: hidden;
+  position: relative;
 }
 
 @keyframes modalFadeIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .modal-header {
-  padding: 1.25rem 1.5rem;
+  padding: 1.1rem 1.5rem;
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: var(--bg-surface);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .modal-header h2 {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+/* Modal Form Container - Constrains flex layout */
+#scheduleModalForm {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+}
+
+/* Independently scrollable Modal Body */
+.modal-body {
+  padding: 1.15rem 1.5rem 1.75rem 1.5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Form groups inside schedule modal - compact spacing */
+#scheduleModalForm .form-group {
+  margin-bottom: 0.35rem;
+  gap: 0.3rem;
+}
+
+#scheduleModalForm .form-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
-.modal-body {
-  padding: 1.5rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1.15rem;
+#scheduleModalForm .form-input {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
 }
 
+/* Grid Rows for Form Inputs */
+.modal-form-row {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.modal-form-row-datetime {
+  grid-template-columns: 1.2fr 1fr 1fr;
+}
+
+.modal-form-row-meta {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* Fixed / Sticky Modal Footer with Zero Overlap */
 .modal-footer {
-  padding: 1rem 1.5rem;
+  padding: 0.85rem 1.5rem;
   border-top: 1px solid var(--border-subtle);
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 0.75rem;
   background: var(--bg-surface-elevated);
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
   border-bottom-left-radius: var(--radius-lg);
   border-bottom-right-radius: var(--radius-lg);
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.04);
 }
 
 .btn-close-modal {
@@ -835,10 +921,14 @@
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
 }
 
 .btn-close-modal:hover {
   color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 /* --------------------------------------------------------------------------
@@ -848,16 +938,18 @@
   background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 1rem;
+  padding: 0.85rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  box-sizing: border-box;
 }
 
 .song-search-bar {
   display: flex;
   gap: 0.5rem;
   position: relative;
+  align-items: center;
 }
 
 .song-search-results {
@@ -868,7 +960,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  max-height: 220px;
+  max-height: 180px;
   overflow-y: auto;
   z-index: 50;
   margin-top: 4px;
@@ -876,7 +968,7 @@
 }
 
 .song-result-item {
-  padding: 0.6rem 0.8rem;
+  padding: 0.5rem 0.75rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -892,62 +984,81 @@
 .selected-songs-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  max-height: 260px;
+  gap: 0.35rem;
+  max-height: 180px;
   overflow-y: auto;
   padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.selected-songs-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.selected-songs-list::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
 }
 
 .selected-song-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem;
+  padding: 0.42rem 0.65rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  gap: 0.6rem;
+  gap: 0.5rem;
 }
 
 .song-order-num {
   font-weight: 700;
   color: var(--primary);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   width: 24px;
+  flex-shrink: 0;
 }
 
 .song-info {
   flex: 1;
   overflow: hidden;
+  min-width: 0;
 }
 
 .song-title-text {
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.song-artist-text {
+  font-size: 0.72rem;
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.song-artist-text {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
 .song-duration-pill {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
   background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
-  padding: 0.2rem 0.4rem;
+  padding: 0.15rem 0.35rem;
   border-radius: 4px;
+  flex-shrink: 0;
 }
 
 .song-actions {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
+  flex-shrink: 0;
 }
 
 .btn-icon {
@@ -955,9 +1066,9 @@
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px;
+  padding: 3px;
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
 }
 
 .btn-icon:hover {
@@ -973,9 +1084,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--text-secondary);
-  padding-top: 0.5rem;
+  padding-top: 0.45rem;
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -1110,19 +1221,30 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  max-height: 220px;
+  max-height: 180px;
   overflow-y: auto;
   box-shadow: var(--shadow-sm);
   margin-top: 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.library-track-results::-webkit-scrollbar {
+  width: 5px;
+}
+
+.library-track-results::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
 }
 
 .library-track-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 0.8rem;
+  padding: 0.42rem 0.75rem;
   border-bottom: 1px solid var(--border-subtle);
-  gap: 0.75rem;
+  gap: 0.65rem;
   transition: background var(--transition-fast);
 }
 
@@ -1230,7 +1352,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   9. Responsive Adaptations
+   9. Responsive Adaptations (Resolutions: 1920x1080, 1366x768, 1280x720)
    -------------------------------------------------------------------------- */
 @media (max-width: 900px) {
   .calendar-toolbar {
@@ -1246,5 +1368,121 @@
   .details-drawer-panel {
     width: 100vw;
     max-width: 100vw;
+  }
+}
+
+/* Height-based Viewport Responsiveness (Standard 1366x768 & 768p viewports) */
+@media (max-height: 800px) {
+  .modal-overlay {
+    padding: 0.75rem;
+  }
+
+  .modal-dialog {
+    max-height: calc(100vh - 1.5rem);
+  }
+
+  .modal-header {
+    padding: 0.85rem 1.25rem;
+  }
+
+  .modal-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .modal-body {
+    padding: 0.85rem 1.25rem 1.5rem 1.25rem;
+    gap: 0.65rem;
+  }
+
+  .modal-footer {
+    padding: 0.65rem 1.25rem;
+  }
+
+  #scheduleModalForm .form-group {
+    margin-bottom: 0.25rem;
+    gap: 0.2rem;
+  }
+
+  #scheduleModalForm .form-input {
+    padding: 0.42rem 0.65rem;
+    font-size: 0.82rem;
+  }
+
+  .song-manager-box {
+    padding: 0.75rem 0.85rem;
+    gap: 0.5rem;
+  }
+
+  .library-track-results {
+    max-height: 150px;
+  }
+
+  .selected-songs-list {
+    max-height: 150px;
+  }
+}
+
+/* Compact Height Viewport Responsiveness (Standard 1280x720 & 720p viewports) */
+@media (max-height: 700px) {
+  .modal-overlay {
+    padding: 0.5rem;
+  }
+
+  .modal-dialog {
+    max-height: calc(100vh - 1rem);
+  }
+
+  .modal-header {
+    padding: 0.65rem 1rem;
+  }
+
+  .modal-body {
+    padding: 0.65rem 1rem 1.25rem 1rem;
+    gap: 0.5rem;
+  }
+
+  .modal-footer {
+    padding: 0.55rem 1rem;
+  }
+
+  .library-track-results {
+    max-height: 130px;
+  }
+
+  .selected-songs-list {
+    max-height: 130px;
+  }
+}
+
+/* Narrow Width Viewport Adaptations */
+@media (max-width: 640px) {
+  .modal-dialog {
+    max-width: calc(100vw - 1rem);
+    border-radius: var(--radius-md);
+  }
+
+  .modal-header {
+    padding: 0.85rem 1rem;
+  }
+
+  .modal-body {
+    padding: 0.85rem 1rem 1.5rem 1rem;
+  }
+
+  .modal-footer {
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+  }
+
+  .modal-form-row-datetime {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-form-row-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .library-tabs-nav {
+    flex-wrap: wrap;
   }
 }
