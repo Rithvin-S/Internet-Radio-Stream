@@ -37,13 +37,21 @@ const auth = {
     const navContainer = document.getElementById('siteNav');
     if (!navContainer) return;
 
+    const path = window.location.pathname || '';
+    const isPlayer = path === '/' || path === '/index.html' || path.endsWith('/index.html');
+    const isLibrary = path === '/admin/songs.html' || path.endsWith('/admin/songs.html') || path === '/library' || path === '/library.html';
+    const isStations = path === '/stations.html' || path.startsWith('/station.html');
+    const isFavourites = path === '/favourites.html';
+    const isAdminPanel = (path.startsWith('/admin/') && !isLibrary) || path === '/admin';
+
     if (user) {
       const isAdmin = user.role === 'admin';
       navContainer.innerHTML = `
-        <a href="/index.html" class="nav-link">Live Player</a>
-        <a href="/stations.html" class="nav-link">Stations</a>
-        <a href="/favourites.html" class="nav-link">★ Favourites</a>
-        ${isAdmin ? '<a href="/admin/stations.html" class="nav-link admin-link">⚙ Admin Panel</a>' : ''}
+        <a href="/index.html" class="nav-link ${isPlayer ? 'active' : ''}">Live Player</a>
+        ${isAdmin ? `<a href="/admin/songs.html" class="nav-link ${isLibrary ? 'active' : ''}">Library</a>` : ''}
+        <a href="/stations.html" class="nav-link ${isStations ? 'active' : ''}">Stations</a>
+        <a href="/favourites.html" class="nav-link ${isFavourites ? 'active' : ''}">★ Favourites</a>
+        ${isAdmin ? `<a href="/admin/stations.html" class="nav-link admin-link ${isAdminPanel ? 'active' : ''}">⚙ Admin Panel</a>` : ''}
         <div class="user-badge">
           <span>${escapeHtml(user.name)}</span>
           <span class="badge-status active" style="font-size:0.65rem;">${user.role.toUpperCase()}</span>
@@ -57,9 +65,9 @@ const auth = {
       }
     } else {
       navContainer.innerHTML = `
-        <a href="/index.html" class="nav-link">Live Player</a>
-        <a href="/stations.html" class="nav-link">Stations</a>
-        <a href="/login.html" class="nav-link">Sign In</a>
+        <a href="/index.html" class="nav-link ${isPlayer ? 'active' : ''}">Live Player</a>
+        <a href="/stations.html" class="nav-link ${isStations ? 'active' : ''}">Stations</a>
+        <a href="/login.html" class="nav-link ${path.includes('login') ? 'active' : ''}">Sign In</a>
         <a href="/register.html" class="btn-sm btn-primary">Create Account</a>
       `;
     }

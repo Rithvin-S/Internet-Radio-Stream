@@ -119,6 +119,11 @@ app.use('/api/streaming', streamingRoutes);
 const frontendPath = path.join(__dirname, '../../frontend');
 app.use(express.static(frontendPath));
 
+// Dedicated direct route to the Music Library (Library Tab navigation)
+app.get(['/library', '/library.html'], (req, res) => {
+  res.sendFile(path.join(frontendPath, 'admin/songs.html'));
+});
+
 // Also serve root assets for backward compatibility
 app.use('/assets', express.static(path.join(__dirname, '../../assets')));
 app.use('/css', express.static(path.join(__dirname, '../../frontend/css')));
