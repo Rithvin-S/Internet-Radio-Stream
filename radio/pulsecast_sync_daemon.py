@@ -27,18 +27,42 @@ import urllib.parse
 from datetime import datetime
 
 # ==============================================================================
+# Protected Environment Loading (.env)
+# ==============================================================================
+def load_dotenv(env_path=None):
+    """Loads environment variables from an adjacent protected .env file if not already set."""
+    if env_path is None:
+        env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip("'\"")
+                    if k and k not in os.environ:
+                        os.environ[k] = v
+        except Exception:
+            pass
+
+load_dotenv()
+
+# ==============================================================================
 # Configuration & Environment Variables
 # ==============================================================================
 CONFIG = {
-    "BACKEND_STREAMING_URL": os.getenv("BACKEND_STREAMING_URL", "http://localhost:5000/api/streaming/stations"),
-    "RADIO_STREAMING_KEY": os.getenv("RADIO_STREAMING_KEY", "pulsecast_dev_radio_streaming_secret_key_92840184"),
+    "BACKEND_STREAMING_URL": os.getenv("BACKEND_STREAMING_URL", "https://internet-radio-stream.onrender.com/api/streaming/stations"),
+    "RADIO_STREAMING_KEY": os.getenv("RADIO_STREAMING_KEY", "").strip() or None,
     "RADIO_STATION_ID": int(os.getenv("RADIO_STATION_ID", "7")),
     "CACHE_DIR": os.getenv("CACHE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")),
     "CONTAINER_CACHE_DIR": os.getenv("CONTAINER_CACHE_DIR", "/cache"),
     "CACHE_MAX_MB": int(os.getenv("CACHE_MAX_MB", "500")),
     "LIQUIDSOAP_HOST": os.getenv("LIQUIDSOAP_HOST", "127.0.0.1"),
     "LIQUIDSOAP_PORT": int(os.getenv("LIQUIDSOAP_PORT", "1234")),
-    "POLL_INTERVAL_SECONDS": int(os.getenv("POLL_INTERVAL_SECONDS", "10")),
+    "POLL_INTERVAL_SECONDS": int(os.getenv("POLL_INTERVAL_SECONDS", "5")),
     "PRE_BUFFER_SECONDS": int(os.getenv("PRE_BUFFER_SECONDS", "25")),
     "MAX_RETRY_BACKOFF": 60,
     "QUEUE_NAME": "supabase_queue"
@@ -187,7 +211,13 @@ class PulseCastSyncDaemon:
         self.station_id = int(self.config["RADIO_STATION_ID"])
         self.cache_dir = self.config["CACHE_DIR"]
         self.container_cache_dir = self.config["CONTAINER_CACHE_DIR"]
-        self.streaming_key = self.config["RADIO_STREAMING_KEY"]
+
+        raw_key = self.config.get("RADIO_STREAMING_KEY")
+        self.streaming_key = raw_key.strip() if isinstance(raw_key, str) and raw_key.strip() else None
+        if not self.streaming_key:
+            logger.critical("FATAL: RADIO_STREAMING_KEY is missing or empty. Server-to-server authentication requires a valid key.")
+            raise ValueError("RADIO_STREAMING_KEY environment variable is required and must not be empty.")
+
         self.backend_base = self.config["BACKEND_STREAMING_URL"].rstrip("/")
         self.liquidsoap = LiquidsoapClient(
             self.config["LIQUIDSOAP_HOST"],
@@ -484,9 +514,12 @@ class PulseCastSyncDaemon:
 
 
 if __name__ == "__main__":
-    daemon = PulseCastSyncDaemon()
     try:
+        daemon = PulseCastSyncDaemon()
         daemon.run()
+    except (ValueError, KeyError) as e:
+        logger.critical("Daemon startup aborted due to configuration error: %s", e)
+        sys.exit(1)
     except KeyboardInterrupt:
         logger.info("Sync daemon stopped by administrator.")
         sys.exit(0)

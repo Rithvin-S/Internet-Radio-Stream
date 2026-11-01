@@ -45,12 +45,9 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# 6. IDE & Editor Specific Folders (Optional)
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-*.suo
-*.ntvs*
-*.njsproj
+# 7. Python Artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 

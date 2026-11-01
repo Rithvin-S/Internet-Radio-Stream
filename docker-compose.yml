@@ -1,0 +1,40 @@
+services:
+  icecast:
+    image: infiniteproject/icecast:latest
+    container_name: pulsecast-icecast
+    restart: unless-stopped
+    ports:
+      - "${ICECAST_PORT:-8000}:8000"
+    environment:
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?ICECAST_SOURCE_PASSWORD is required in .env}
+      ICECAST_ADMIN_PASSWORD: ${ICECAST_ADMIN_PASSWORD:-${ICECAST_SOURCE_PASSWORD}}
+      ICECAST_PASSWORD: ${ICECAST_PASSWORD:-${ICECAST_SOURCE_PASSWORD}}
+      ICECAST_RELAY_PASSWORD: ${ICECAST_RELAY_PASSWORD:-${ICECAST_SOURCE_PASSWORD}}
+      ICECAST_HOSTNAME: ${ICECAST_HOSTNAME:-pulsecast.duckdns.org}
+      ICECAST_LOCATION: ${ICECAST_LOCATION:-Cloud}
+      ICECAST_ADMIN_EMAIL: ${ICECAST_ADMIN_EMAIL:-admin@pulsecast.com}
+    env_file:
+      - .env
+
+  liquidsoap:
+    image: savonet/liquidsoap:v2.3.3
+    container_name: pulsecast-liquidsoap
+    restart: unless-stopped
+    depends_on:
+      - icecast
+    ports:
+      # Bound strictly to 127.0.0.1 (localhost only) so only the host daemon can access Telnet
+      - "127.0.0.1:${LIQUIDSOAP_PORT:-1234}:1234"
+    environment:
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?ICECAST_SOURCE_PASSWORD is required in .env}
+      ICECAST_HOST: ${ICECAST_HOST:-icecast}
+      ICECAST_PORT: ${ICECAST_PORT:-8000}
+      ICECAST_MOUNT: ${ICECAST_MOUNT:-/pulsecast.mp3}
+      LIQUIDSOAP_PORT: ${LIQUIDSOAP_PORT:-1234}
+    env_file:
+      - .env
+    volumes:
+      - ./cache:/cache:ro
+      - ./music:/music:ro
+      - ./radio.liq:/radio.liq:ro
+    command: ["liquidsoap", "/radio.liq"]

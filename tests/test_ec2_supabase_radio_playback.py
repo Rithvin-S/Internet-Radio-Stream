@@ -127,7 +127,7 @@ def run_tests():
         sched_body = {
             "title": "Phase 3 Supabase Live Broadcast",
             "station_id": STATION_ID,
-            "start_time": "00:00",
+            "start_time": "22:56",
             "end_time": "23:59",
             "is_published": True,
             "schedule_date": today_str,
